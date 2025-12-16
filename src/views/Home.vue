@@ -7,20 +7,37 @@
           <h2>食谱管理系统</h2>
         </div>
         <el-menu
-            default-active="1"
+            default-active="/home/recipe-list"
             class="sidebar-menu"
             background-color="#2e3b4e"
             text-color="#fff"
             active-text-color="#ffd04b"
             router
         >
-          <el-menu-item index="1" route="/home/recipe-list">
+          <!-- 1. 食谱列表 -->
+          <el-menu-item index="/home/recipe-list">
             <el-icon><Menu /></el-icon>
             <template #title>食谱列表</template>
           </el-menu-item>
-          <el-menu-item index="2" route="/home/recipe-create">
+          <!-- 2. 创建食谱 -->
+          <el-menu-item index="/home/recipe-create">
             <el-icon><Plus /></el-icon>
             <template #title>创建食谱</template>
+          </el-menu-item>
+          <!-- 3. 我的食谱 -->
+          <el-menu-item index="/home/my-recipe">
+            <el-icon><UserFilled /></el-icon>
+            <template #title>我的食谱</template>
+          </el-menu-item>
+          <!-- 4. 个人中心 -->
+          <el-menu-item index="/home/profile">
+            <el-icon><User /></el-icon>
+            <template #title>个人中心</template>
+          </el-menu-item>
+          <!-- 5. 管理员面板（仅管理员显示） -->
+          <el-menu-item index="/home/admin" v-if="!!userStore.userInfo?.isAdmin">
+            <el-icon><Setting /></el-icon>
+            <template #title>管理员面板</template>
           </el-menu-item>
         </el-menu>
       </el-aside>
@@ -59,7 +76,7 @@
 <script setup>
 import { useUserStore } from '@/stores/user'
 import { useRouter } from 'vue-router'
-import { Menu, Plus, User, SwitchButton } from '@element-plus/icons-vue'
+import { Menu, Plus, User, UserFilled, Setting, SwitchButton } from '@element-plus/icons-vue'
 
 const userStore = useUserStore()
 const router = useRouter()
@@ -116,6 +133,17 @@ const handleLogout = () => {
   .main-content {
     padding: 20px;
     background-color: #f5f7fa;
+  }
+
+  :deep(.el-menu-item) {
+    color: #fff;
+    &:hover {
+      background-color: #1f2d3d !important;
+    }
+    &.is-active {
+      background-color: #409eff !important;
+      color: #fff !important;
+    }
   }
 }
 </style>

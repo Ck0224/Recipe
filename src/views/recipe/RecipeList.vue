@@ -1,10 +1,10 @@
 <template>
   <div class="recipe-list">
     <el-card>
-      <!-- 搜索筛选栏-->
+      <!-- 搜索筛选栏（保留原有逻辑）-->
       <div class="search-bar">
         <el-row :gutter="20" type="flex" justify="center">
-          <!-- 食谱ID搜索 -->
+          <!-- 原有筛选项：ID/名称/分类/食材/难度 -->
           <el-col :span="4">
             <el-input
                 v-model="searchForm.id"
@@ -18,7 +18,6 @@
               仅支持正整数ID查询
             </div>
           </el-col>
-          <!-- 食谱名称搜索 -->
           <el-col :span="5">
             <el-input
                 v-model="searchForm.title"
@@ -27,7 +26,6 @@
                 @keyup.enter="loadRecipeList"
             ></el-input>
           </el-col>
-          <!-- 分类搜索 -->
           <el-col :span="5">
             <el-input
                 v-model="searchForm.category"
@@ -36,7 +34,6 @@
                 @keyup.enter="loadRecipeList"
             ></el-input>
           </el-col>
-          <!-- 食材搜索 -->
           <el-col :span="5">
             <el-input
                 v-model="searchForm.ingredient"
@@ -45,7 +42,6 @@
                 @keyup.enter="loadRecipeList"
             ></el-input>
           </el-col>
-          <!-- 难度筛选 -->
           <el-col :span="4">
             <el-select
                 v-model="searchForm.difficulty"
@@ -59,7 +55,20 @@
             </el-select>
           </el-col>
 
-          <!-- ========== 核心调整：按钮区域 ========== -->
+          <!-- 私有食谱筛选（仅普通用户显示） -->
+          <el-col v-if="!userStore.userInfo.isAdmin" :span="4">
+            <el-select
+                v-model="searchForm.isPrivate"
+                placeholder="食谱隐私状态"
+                clearable
+                @change="loadRecipeList"
+            >
+              <el-option label="公开食谱" value="false"></el-option>
+              <el-option label="我的私有食谱" value="true"></el-option>
+            </el-select>
+          </el-col>
+
+          <!-- 按钮区域 -->
           <el-col :span="4" class="btn-group">
             <el-button
                 type="primary"
@@ -80,7 +89,7 @@
         </el-row>
       </div>
 
-      <!-- 食谱列表/分页（原有内容不变） -->
+      <!-- 食谱列表（移除删除按钮） -->
       <div class="list-content mt-4">
         <el-table
             :data="recipeList"
@@ -92,7 +101,17 @@
             empty-text="暂无符合条件的食谱数据"
         >
           <el-table-column prop="id" label="ID" width="80" align="center"></el-table-column>
-          <el-table-column prop="title" label="食谱名称" min-width="200"></el-table-column>
+          <el-table-column prop="title" label="食谱名称" min-width="200">
+            <!-- 私有食谱标记 -->
+            <template #default="scope">
+              <span>
+                {{ scope.row.title }}
+                <el-tag v-if="scope.row.isPrivate" size="small" type="info" style="margin-left: 8px;">
+                  私有
+                </el-tag>
+              </span>
+            </template>
+          </el-table-column>
           <el-table-column prop="category" label="分类" width="120"></el-table-column>
           <el-table-column prop="difficulty" label="难度" width="100">
             <template #default="scope">
@@ -110,8 +129,9 @@
             </template>
           </el-table-column>
           <el-table-column prop="createdAt" label="创建时间" width="200"></el-table-column>
-          <el-table-column label="操作" width="200" align="center">
+          <el-table-column label="操作" width="120" align="center">
             <template #default="scope">
+              <!-- 仅保留查看按钮：所有人可见 -->
               <el-button
                   type="primary"
                   size="small"
@@ -120,15 +140,7 @@
               >
                 查看
               </el-button>
-              <el-button
-                  type="danger"
-                  size="small"
-                  icon="Delete"
-                  @click="deleteRecipe(scope.row.id)"
-                  style="margin-left: 10px;"
-              >
-                删除
-              </el-button>
+              <!-- 已移除所有删除按钮 -->
             </template>
           </el-table-column>
         </el-table>
@@ -151,11 +163,10 @@
 </template>
 
 <script setup>
-// 原有script逻辑完全不变
 import { ref, reactive, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { ElMessage, ElMessageBox } from 'element-plus'
-import { getRecipeList, deleteRecipe as deleteRecipeApi } from '@/api/recipe'
+import { ElMessage } from 'element-plus'
+import { getRecipeList } from '@/api/recipe' // 移除deleteRecipeApi导入
 import { useUserStore } from '@/stores/user'
 
 const router = useRouter()
@@ -167,12 +178,14 @@ const size = ref(10)
 const total = ref(0)
 const loading = ref(false)
 
+// 搜索表单：保留isPrivate筛选
 const searchForm = reactive({
   id: '',
   title: '',
   category: '',
   ingredient: '',
-  difficulty: ''
+  difficulty: '',
+  isPrivate: ''
 })
 
 const validateId = () => {
@@ -182,6 +195,7 @@ const validateId = () => {
   }
 }
 
+// 加载食谱列表（保留原有逻辑）
 const loadRecipeList = async () => {
   if (searchForm.id !== '' && searchForm.id <= 0) {
     ElMessage.warning('食谱ID必须是正整数，请重新输入！')
@@ -197,7 +211,9 @@ const loadRecipeList = async () => {
       title: searchForm.title.trim() || undefined,
       category: searchForm.category.trim() || undefined,
       ingredient: searchForm.ingredient.trim() || undefined,
-      difficulty: searchForm.difficulty || undefined
+      difficulty: searchForm.difficulty || undefined,
+      userId: userStore.userInfo.isAdmin ? undefined : userStore.userInfo.id,
+      isPrivate: searchForm.isPrivate || undefined
     }
     const res = await getRecipeList(params)
     recipeList.value = res.content || []
@@ -216,6 +232,7 @@ const resetSearch = () => {
   searchForm.category = ''
   searchForm.ingredient = ''
   searchForm.difficulty = ''
+  searchForm.isPrivate = ''
   page.value = 0
   loadRecipeList()
 }
@@ -239,28 +256,7 @@ const viewDetail = (id) => {
   router.push(`/home/recipe-detail/${id}`)
 }
 
-const deleteRecipe = async (id) => {
-  try {
-    await ElMessageBox.confirm(
-        '确定要删除该食谱吗？删除后将无法恢复！',
-        '删除确认',
-        {
-          confirmButtonText: '确定',
-          cancelButtonText: '取消',
-          type: 'warning',
-          draggable: true
-        }
-    )
-    await deleteRecipeApi(id, userStore.userInfo?.id)
-    ElMessage.success('食谱删除成功！')
-    loadRecipeList()
-  } catch (error) {
-    if (error !== 'cancel') {
-      console.error('删除食谱失败', error)
-      ElMessage.error('删除食谱失败：' + (error.message || '权限不足或网络异常'))
-    }
-  }
-}
+// 已删除deleteRecipe函数（无需保留）
 
 onMounted(() => {
   loadRecipeList()
@@ -283,16 +279,15 @@ onMounted(() => {
       width: 100%;
     }
 
-    // ========== 核心：按钮组样式调整 ==========
     .btn-group {
       display: flex;
-      gap: 10px; // 按钮之间的间距
-      justify-content: center; // 按钮组内部居中
-      align-items: flex-end; // 按钮向下对齐（和输入框底部齐平/略下）
-      margin-top: 24px; // 向下偏移的距离（可按需调整，比如16px/20px）
+      gap: 10px;
+      justify-content: center;
+      align-items: flex-end;
+      margin-top: 24px;
 
       .search-btn, .reset-btn {
-        flex: 1; // 两个按钮平分列宽
+        flex: 1;
         width: 100%;
         white-space: nowrap;
       }
@@ -303,6 +298,11 @@ onMounted(() => {
     :deep(.el-table) {
       --el-table-header-text-color: #303133;
       --el-table-row-hover-bg-color: #f5f7fa;
+    }
+
+    :deep(.el-tag--info) {
+      background-color: #e8f4f8;
+      color: #409eff;
     }
   }
 
