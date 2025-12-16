@@ -15,7 +15,8 @@ import java.util.Map;
 import java.util.function.Function;
 
 /**
- * JWT工具类（终极版：0.12.3 无任何报错，兼容所有环境）
+ * JWT工具类（适配权限拦截器 + 0.12.3 稳定版）
+ * 核心功能：生成Token、解析用户ID/用户名、验证Token有效性
  */
 @Component
 public class JwtUtil {
@@ -24,11 +25,11 @@ public class JwtUtil {
     private String jwtSecret;
 
     // Token有效期（毫秒）
-    @Value("${jwt.expiration}")
+    @Value("${jwt.expiration:86400000}") // 默认24小时
     private long jwtExpiration;
 
     // 签发者
-    @Value("${jwt.issuer}")
+    @Value("${jwt.issuer:recipe-app}") // 默认值
     private String issuer;
 
     // 签名密钥（最终使用的SecretKey）
@@ -69,10 +70,14 @@ public class JwtUtil {
     }
 
     /**
-     * 提取用户ID
+     * 提取用户ID（适配AuthInterceptor）
      */
     public Long extractUserId(String token) {
-        return extractClaim(token, claims -> claims.get("userId", Long.class));
+        try {
+            return extractClaim(token, claims -> claims.get("userId", Long.class));
+        } catch (Exception e) {
+            throw new RuntimeException("Token中未找到用户ID：" + e.getMessage());
+        }
     }
 
     /**
@@ -117,8 +122,18 @@ public class JwtUtil {
      */
     public boolean validateToken(String token, UserDetails userDetails) {
         final String username = extractUsername(token);
-        // 临时调用extractUserId消除"未使用"提示（实际项目中会用到）
-        extractUserId(token);
         return username.equals(userDetails.getUsername()) && !isTokenExpired(token);
+    }
+
+    /**
+     * 适配AuthInterceptor：验证Token有效性（按用户ID）
+     */
+    public boolean validateToken(String token, Long userId) {
+        try {
+            Long tokenUserId = extractUserId(token);
+            return tokenUserId.equals(userId) && !isTokenExpired(token);
+        } catch (Exception e) {
+            return false;
+        }
     }
 }

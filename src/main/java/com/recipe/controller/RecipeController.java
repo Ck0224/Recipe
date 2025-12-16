@@ -7,6 +7,7 @@ import com.recipe.entity.Recipe;
 import com.recipe.entity.Step;
 import com.recipe.entity.User;
 import com.recipe.service.RecipeService;
+import com.recipe.service.UserService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -18,16 +19,17 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 /**
- * 食谱控制器（完整适配：ID+分类+菜名+食材+难度 多条件搜索）
+ * 食谱控制器（完整适配：权限控制 + ID+分类+菜名+食材+难度 多条件搜索）
  */
 @RestController
 @RequestMapping("/api/recipes")
 @RequiredArgsConstructor
 public class RecipeController {
     private final RecipeService recipeService;
+    private final UserService userService; // 新增：注入用户服务用于权限判断
 
-    // ========== 基础CRUD接口（保留原有逻辑） ==========
-    // 创建食谱
+    // ========== 基础CRUD接口（增强权限控制） ==========
+    // 1. 创建食谱（原有逻辑不变）
     @PostMapping
     public ResponseEntity<Result<RecipeDTO>> createRecipe(
             @RequestBody Recipe recipe,
@@ -42,11 +44,14 @@ public class RecipeController {
         }
     }
 
-    // 根据ID查询食谱
+    // 2. 根据ID查询食谱（新增：当前用户ID参数，权限校验）
     @GetMapping("/{id}")
-    public ResponseEntity<Result<RecipeDTO>> getRecipeById(@PathVariable Long id) {
+    public ResponseEntity<Result<RecipeDTO>> getRecipeById(
+            @PathVariable Long id,
+            @RequestParam Long currentUserId // 新增：当前登录用户ID
+    ) {
         try {
-            Recipe recipe = recipeService.getRecipeById(id);
+            Recipe recipe = recipeService.getRecipeById(id, currentUserId);
             RecipeDTO dto = convertToDTO(recipe);
             return ResponseEntity.ok(Result.success(dto));
         } catch (Exception e) {
@@ -54,15 +59,18 @@ public class RecipeController {
         }
     }
 
-    // 更新食谱
+    // 3. 更新食谱（新增：管理员权限判断）
     @PutMapping("/{id}")
     public ResponseEntity<Result<RecipeDTO>> updateRecipe(
             @PathVariable Long id,
             @RequestBody Recipe recipe,
-            @RequestParam Long userId
+            @RequestParam Long currentUserId // 当前登录用户ID
     ) {
         try {
-            Recipe updatedRecipe = recipeService.updateRecipe(id, recipe, userId);
+            // 判断当前用户是否为管理员
+            Boolean isAdmin = userService.isAdmin(currentUserId);
+            // 调用带权限的更新方法
+            Recipe updatedRecipe = recipeService.updateRecipe(id, recipe, currentUserId, isAdmin);
             RecipeDTO dto = convertToDTO(updatedRecipe);
             return ResponseEntity.ok(Result.success(dto));
         } catch (Exception e) {
@@ -70,21 +78,87 @@ public class RecipeController {
         }
     }
 
-    // 删除食谱
+    // 4. 删除食谱（新增：管理员权限判断）
     @DeleteMapping("/{id}")
     public ResponseEntity<Result<Void>> deleteRecipe(
             @PathVariable Long id,
-            @RequestParam Long userId
+            @RequestParam Long currentUserId // 当前登录用户ID
     ) {
         try {
-            recipeService.deleteRecipe(id, userId);
+            // 判断当前用户是否为管理员
+            Boolean isAdmin = userService.isAdmin(currentUserId);
+            // 调用带权限的删除方法
+            recipeService.deleteRecipe(id, currentUserId, isAdmin);
             return ResponseEntity.ok(Result.success());
         } catch (Exception e) {
             return ResponseEntity.ok(Result.error("删除食谱失败：" + e.getMessage()));
         }
     }
 
-    // ========== 核心：多条件组合查询（ID+分类+菜名+食材+难度） ==========
+    // ========== 核心新增：用户可见食谱查询（公开 + 自己的私有） ==========
+    @GetMapping("/visible")
+    public ResponseEntity<Result<Page<RecipeDTO>>> getUserVisibleRecipes(
+            @RequestParam Long currentUserId,     // 当前登录用户ID
+            @RequestParam(required = false) Long id,          // 食谱ID
+            @RequestParam(required = false) String title,     // 菜名
+            @RequestParam(required = false) String category,  // 分类
+            @RequestParam(required = false) String difficulty,// 难度
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size) {
+        try {
+            Pageable pageable = PageRequest.of(page, size);
+            // 调用用户可见食谱查询
+            Page<Recipe> recipePage = recipeService.getUserVisibleRecipes(
+                    currentUserId, id, title, category, difficulty, pageable);
+            Page<RecipeDTO> dtoPage = recipePage.map(this::convertToDTO);
+            return ResponseEntity.ok(Result.success(dtoPage));
+        } catch (Exception e) {
+            return ResponseEntity.ok(Result.error("查询可见食谱失败：" + e.getMessage()));
+        }
+    }
+
+    // ========== 核心增强：带权限的多条件查询（管理员看所有，普通用户看可见） ==========
+    @GetMapping("/search/all")
+    public ResponseEntity<Result<Page<RecipeDTO>>> getRecipesWithPermission(
+            @RequestParam Long currentUserId,     // 当前登录用户ID
+            @RequestParam(required = false) Long id,          // 食谱ID
+            @RequestParam(required = false) String title,     // 菜名
+            @RequestParam(required = false) String category,  // 分类
+            @RequestParam(required = false) String ingredient,// 食材
+            @RequestParam(required = false) String difficulty,// 难度
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size) {
+        try {
+            Pageable pageable = PageRequest.of(page, size);
+            // 判断当前用户是否为管理员
+            Boolean isAdmin = userService.isAdmin(currentUserId);
+            // 调用带权限的多条件查询
+            Page<Recipe> recipePage = recipeService.getRecipesByMultiConditionsWithPermission(
+                    currentUserId, isAdmin, id, title, category, ingredient, difficulty, pageable);
+            Page<RecipeDTO> dtoPage = recipePage.map(this::convertToDTO);
+            return ResponseEntity.ok(Result.success(dtoPage));
+        } catch (Exception e) {
+            return ResponseEntity.ok(Result.error("查询食谱失败：" + e.getMessage()));
+        }
+    }
+
+    // ========== 保留：我的食谱查询（按用户ID） ==========
+    @GetMapping("/my")
+    public ResponseEntity<Result<Page<RecipeDTO>>> getMyRecipes(
+            @RequestParam Long userId,            // 当前登录用户ID
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size) {
+        try {
+            Pageable pageable = PageRequest.of(page, size);
+            Page<Recipe> recipePage = recipeService.getRecipesByUserId(userId, pageable);
+            Page<RecipeDTO> dtoPage = recipePage.map(this::convertToDTO);
+            return ResponseEntity.ok(Result.success(dtoPage));
+        } catch (Exception e) {
+            return ResponseEntity.ok(Result.error("查询我的食谱失败：" + e.getMessage()));
+        }
+    }
+
+    // ========== 兼容原有：仅查公开食谱的多条件查询 ==========
     @GetMapping
     public ResponseEntity<Result<Page<RecipeDTO>>> getPublicRecipes(
             @RequestParam(required = false) Long id,          // 食谱ID（正整数）
@@ -95,44 +169,17 @@ public class RecipeController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size) {
         try {
-            // 1. 分页条件（和原有逻辑一致）
             Pageable pageable = PageRequest.of(page, size);
-
-            // 2. 调用多条件查询Service（新增title参数）
             Page<Recipe> recipePage = recipeService.getRecipesByMultiConditions(
                     id, title, category, ingredient, difficulty, pageable);
-
-            // 3. DTO转换（复用原有逻辑）
             Page<RecipeDTO> dtoPage = recipePage.map(this::convertToDTO);
-
             return ResponseEntity.ok(Result.success(dtoPage));
         } catch (Exception e) {
             return ResponseEntity.ok(Result.error("查询食谱失败：" + e.getMessage()));
         }
     }
 
-    // ========== 废弃冗余接口（原有/search接口可删除，功能已合并到上面的多条件查询） ==========
-    // 若需兼容旧版前端，可保留此接口并内部调用多条件查询
-    /*
-    @GetMapping("/search")
-    public ResponseEntity<Result<Page<RecipeDTO>>> searchRecipes(
-            @RequestParam String keyword,
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "10") int size) {
-        try {
-            Pageable pageable = PageRequest.of(page, size);
-            // 复用多条件查询，仅传title参数（等效原有关键词搜索）
-            Page<Recipe> recipePage = recipeService.getRecipesByMultiConditions(
-                    null, keyword, null, null, null, pageable);
-            Page<RecipeDTO> dtoPage = recipePage.map(this::convertToDTO);
-            return ResponseEntity.ok(Result.success(dtoPage));
-        } catch (Exception e) {
-            return ResponseEntity.ok(Result.error("搜索食谱失败：" + e.getMessage()));
-        }
-    }
-    */
-
-    // ========== DTO转换方法（保留原有逻辑，无需修改） ==========
+    // ========== 工具方法：DTO转换（保留原有逻辑） ==========
     private RecipeDTO convertToDTO(Recipe recipe) {
         RecipeDTO dto = new RecipeDTO();
 
@@ -161,6 +208,7 @@ public class RecipeController {
             userDTO.setUsername(user.getUsername());
             userDTO.setEmail(user.getEmail());
             userDTO.setAvatarUrl(user.getAvatarUrl());
+            userDTO.setIsAdmin(user.getIsAdmin()); // 新增：返回管理员标识
             dto.setUser(userDTO);
         }
 
@@ -205,5 +253,16 @@ public class RecipeController {
         dto.setTimerMinutes(step.getTimerMinutes());
         dto.setSortOrder(step.getSortOrder());
         return dto;
+    }
+
+    // ========== 兼容旧版接口（无currentUserId参数） ==========
+    /**
+     * 兼容旧版查询食谱详情（仅查公开食谱）
+     * @deprecated 建议使用带currentUserId的重载方法
+     */
+    @Deprecated
+    @GetMapping("/{id}/public")
+    public ResponseEntity<Result<RecipeDTO>> getPublicRecipeById(@PathVariable Long id) {
+        return getRecipeById(id, -1L); // 传入无效用户ID，仅查公开食谱
     }
 }

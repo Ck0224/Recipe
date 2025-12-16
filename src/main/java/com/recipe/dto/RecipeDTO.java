@@ -43,6 +43,8 @@ public class RecipeDTO {
         private String username;
         private String email;
         private String avatarUrl;
+        // 核心新增：管理员标识字段（Lombok自动生成setIsAdmin/getIsAdmin）
+        private Boolean isAdmin;
     }
 
     // 嵌套DTO：食材信息

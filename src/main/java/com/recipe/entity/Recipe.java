@@ -2,6 +2,7 @@ package com.recipe.entity;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.annotation.JsonIgnore; // 新增导入
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -24,6 +25,8 @@ public class Recipe {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    // 关联用户：LAZY懒加载 + JsonIgnore避免序列化嵌套
+    @JsonIgnore
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id", nullable = false)
     private User user;
@@ -75,7 +78,8 @@ public class Recipe {
     @Column(name = "likes")
     private Integer likes = 0;
 
-    @Column(name = "is_private")
+    // 增强私有食谱字段：默认false + 非空约束
+    @Column(name = "is_private", nullable = false, columnDefinition = "BOOLEAN DEFAULT false")
     private Boolean isPrivate = false;
 
     @CreationTimestamp
@@ -86,26 +90,42 @@ public class Recipe {
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
 
-    // 关联食材（级联删除/更新）
-    @OneToMany(mappedBy = "recipe", cascade = CascadeType.ALL, orphanRemoval = true)
+    // 关联食材：LAZY懒加载 + JsonIgnore避免序列化嵌套
+    @JsonIgnore
+    @OneToMany(mappedBy = "recipe", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
     @OrderBy("sortOrder ASC")
     private List<Ingredient> ingredients;
 
-    // 关联步骤（级联删除/更新）
-    @OneToMany(mappedBy = "recipe", cascade = CascadeType.ALL, orphanRemoval = true)
+    // 关联步骤：LAZY懒加载 + JsonIgnore避免序列化嵌套
+    @JsonIgnore
+    @OneToMany(mappedBy = "recipe", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
     @OrderBy("stepNumber ASC")
     private List<Step> steps;
 
-    // 关联收藏
-    @OneToMany(mappedBy = "recipe", cascade = CascadeType.ALL, orphanRemoval = true)
+    // 关联收藏：LAZY懒加载 + JsonIgnore避免序列化嵌套
+    @JsonIgnore
+    @OneToMany(mappedBy = "recipe", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
     private List<Favorite> favorites;
 
-    // 关联膳食计划
-    @OneToMany(mappedBy = "recipe", cascade = CascadeType.ALL, orphanRemoval = true)
+    // 关联膳食计划：LAZY懒加载 + JsonIgnore避免序列化嵌套
+    @JsonIgnore
+    @OneToMany(mappedBy = "recipe", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
     private List<MealPlan> mealPlans;
 
     // 难度枚举
     public enum Difficulty {
         EASY, MEDIUM, HARD
+    }
+
+    // 新增：获取tagList（从tags字符串反序列化）
+    public List<String> getTagList() {
+        if (this.tagList == null && this.tags != null) {
+            try {
+                this.tagList = new ObjectMapper().readValue(this.tags, List.class);
+            } catch (JsonProcessingException e) {
+                throw new RuntimeException("标签反序列化失败", e);
+            }
+        }
+        return this.tagList;
     }
 }
