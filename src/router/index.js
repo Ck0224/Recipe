@@ -7,6 +7,7 @@ import Home from '@/views/Home.vue'
 import RecipeList from '@/views/recipe/RecipeList.vue'
 import RecipeCreate from '@/views/recipe/RecipeCreate.vue'
 import RecipeDetail from '@/views/recipe/RecipeDetail.vue'
+import RecipeSearch from '@/views/recipe/RecipeSearch.vue' // 保留新增的搜索组件
 
 // 路由规则
 const routes = [
@@ -43,6 +44,16 @@ const routes = [
                 name: 'RecipeDetail',
                 component: RecipeDetail,
                 meta: { title: '食谱详情 - 食谱管理系统' }
+            },
+            // ========== 新增：食谱搜索路由 ==========
+            {
+                path: 'recipe-search', // 路由路径（和其他食谱路由风格统一）
+                name: 'RecipeSearch',  // 路由名称
+                component: RecipeSearch, // 绑定搜索组件
+                meta: {
+                    title: '食谱搜索 - 食谱管理系统', // 页面标题（和原有格式一致）
+                    requireAuth: true // 继承Home的登录权限，也可省略（父级已校验）
+                }
             }
         ]
     }

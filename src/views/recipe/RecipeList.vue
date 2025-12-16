@@ -1,10 +1,34 @@
 <template>
   <div class="recipe-list">
     <el-card>
-      <!-- 搜索筛选栏 -->
+      <!-- 搜索筛选栏-->
       <div class="search-bar">
-        <el-row :gutter="20">
-          <el-col :span="6">
+        <el-row :gutter="20" type="flex" justify="center">
+          <!-- 食谱ID搜索 -->
+          <el-col :span="4">
+            <el-input
+                v-model="searchForm.id"
+                placeholder="请输入食谱ID（正整数）"
+                type="number"
+                prefix-icon="Key"
+                @keyup.enter="loadRecipeList"
+                @input="validateId"
+            ></el-input>
+            <div class="input-tip" style="font-size: 12px; color: #999; margin-top: 4px;">
+              仅支持正整数ID查询
+            </div>
+          </el-col>
+          <!-- 食谱名称搜索 -->
+          <el-col :span="5">
+            <el-input
+                v-model="searchForm.title"
+                placeholder="请输入食谱名称（如番茄炒蛋）"
+                prefix-icon="Document"
+                @keyup.enter="loadRecipeList"
+            ></el-input>
+          </el-col>
+          <!-- 分类搜索 -->
+          <el-col :span="5">
             <el-input
                 v-model="searchForm.category"
                 placeholder="请输入分类（如家常菜）"
@@ -12,29 +36,43 @@
                 @keyup.enter="loadRecipeList"
             ></el-input>
           </el-col>
-          <el-col :span="6">
+          <!-- 食材搜索 -->
+          <el-col :span="5">
+            <el-input
+                v-model="searchForm.ingredient"
+                placeholder="请输入食材（如番茄）"
+                prefix-icon="Food"
+                @keyup.enter="loadRecipeList"
+            ></el-input>
+          </el-col>
+          <!-- 难度筛选 -->
+          <el-col :span="4">
             <el-select
                 v-model="searchForm.difficulty"
                 placeholder="请选择难度"
                 clearable
+                @change="loadRecipeList"
             >
               <el-option label="简单" value="EASY"></el-option>
               <el-option label="中等" value="MEDIUM"></el-option>
               <el-option label="困难" value="HARD"></el-option>
             </el-select>
           </el-col>
-          <el-col :span="6">
+
+          <!-- ========== 核心调整：按钮区域 ========== -->
+          <el-col :span="4" class="btn-group">
             <el-button
                 type="primary"
                 icon="Search"
                 @click="loadRecipeList"
+                class="search-btn"
             >
               搜索
             </el-button>
             <el-button
                 icon="Refresh"
                 @click="resetSearch"
-                style="margin-left: 10px;"
+                class="reset-btn"
             >
               重置
             </el-button>
@@ -42,7 +80,7 @@
         </el-row>
       </div>
 
-      <!-- 食谱列表 -->
+      <!-- 食谱列表/分页（原有内容不变） -->
       <div class="list-content mt-4">
         <el-table
             :data="recipeList"
@@ -50,6 +88,8 @@
             stripe
             style="width: 100%"
             @row-click="handleRowClick"
+            v-loading="loading"
+            empty-text="暂无符合条件的食谱数据"
         >
           <el-table-column prop="id" label="ID" width="80" align="center"></el-table-column>
           <el-table-column prop="title" label="食谱名称" min-width="200"></el-table-column>
@@ -93,8 +133,6 @@
           </el-table-column>
         </el-table>
       </div>
-
-      <!-- 分页控件 -->
       <div class="pagination mt-4">
         <el-pagination
             @size-change="handleSizeChange"
@@ -113,6 +151,7 @@
 </template>
 
 <script setup>
+// 原有script逻辑完全不变
 import { ref, reactive, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
@@ -122,96 +161,107 @@ import { useUserStore } from '@/stores/user'
 const router = useRouter()
 const userStore = useUserStore()
 
-// 状态变量
 const recipeList = ref([])
 const page = ref(0)
 const size = ref(10)
 const total = ref(0)
 const loading = ref(false)
 
-// 搜索表单
 const searchForm = reactive({
+  id: '',
+  title: '',
   category: '',
+  ingredient: '',
   difficulty: ''
 })
 
-// 加载食谱列表
+const validateId = () => {
+  if (searchForm.id !== '' && (isNaN(searchForm.id) || searchForm.id <= 0)) {
+    ElMessage.warning('食谱ID必须是正整数！')
+    searchForm.id = ''
+  }
+}
+
 const loadRecipeList = async () => {
+  if (searchForm.id !== '' && searchForm.id <= 0) {
+    ElMessage.warning('食谱ID必须是正整数，请重新输入！')
+    return
+  }
+
   try {
     loading.value = true
     const params = {
       page: page.value,
       size: size.value,
-      category: searchForm.category || undefined,
+      id: searchForm.id ? Number(searchForm.id) : undefined,
+      title: searchForm.title.trim() || undefined,
+      category: searchForm.category.trim() || undefined,
+      ingredient: searchForm.ingredient.trim() || undefined,
       difficulty: searchForm.difficulty || undefined
     }
     const res = await getRecipeList(params)
-    recipeList.value = res.content
-    total.value = res.totalElements
+    recipeList.value = res.content || []
+    total.value = res.totalElements || 0
   } catch (error) {
     console.error('加载食谱列表失败', error)
-    ElMessage.error('加载食谱列表失败')
+    ElMessage.error('加载食谱列表失败：' + (error.message || '网络异常'))
   } finally {
     loading.value = false
   }
 }
 
-// 重置搜索条件
 const resetSearch = () => {
+  searchForm.id = ''
+  searchForm.title = ''
   searchForm.category = ''
+  searchForm.ingredient = ''
   searchForm.difficulty = ''
   page.value = 0
   loadRecipeList()
 }
 
-// 页码变化
 const handleCurrentChange = (val) => {
-  page.value = val - 1 // 转换为后端页码（0开始）
+  page.value = val - 1
   loadRecipeList()
 }
 
-// 每页条数变化
 const handleSizeChange = (val) => {
   size.value = val
-  page.value = 0 // 重置页码
+  page.value = 0
   loadRecipeList()
 }
 
-// 行点击事件（查看详情）
 const handleRowClick = (row) => {
   viewDetail(row.id)
 }
 
-// 查看详情
 const viewDetail = (id) => {
   router.push(`/home/recipe-detail/${id}`)
 }
 
-// 删除食谱
 const deleteRecipe = async (id) => {
   try {
     await ElMessageBox.confirm(
         '确定要删除该食谱吗？删除后将无法恢复！',
-        '警告',
+        '删除确认',
         {
           confirmButtonText: '确定',
           cancelButtonText: '取消',
-          type: 'warning'
+          type: 'warning',
+          draggable: true
         }
     )
-    // 👇 关键修改：deleteRecipe → deleteRecipeApi
-    await deleteRecipeApi(id, userStore.userInfo.id)
-    ElMessage.success('删除成功')
-    loadRecipeList() // 重新加载列表
+    await deleteRecipeApi(id, userStore.userInfo?.id)
+    ElMessage.success('食谱删除成功！')
+    loadRecipeList()
   } catch (error) {
     if (error !== 'cancel') {
       console.error('删除食谱失败', error)
-      ElMessage.error('删除食谱失败')
+      ElMessage.error('删除食谱失败：' + (error.message || '权限不足或网络异常'))
     }
   }
 }
 
-// 初始化加载
 onMounted(() => {
   loadRecipeList()
 })
@@ -219,13 +269,49 @@ onMounted(() => {
 
 <style scoped lang="scss">
 .recipe-list {
+  padding: 20px;
+
   .search-bar {
     padding: 10px 0;
     border-bottom: 1px solid #e6e6e6;
+
+    :deep(.el-input__prefix) {
+      color: #909399;
+    }
+
+    :deep(.el-select) {
+      width: 100%;
+    }
+
+    // ========== 核心：按钮组样式调整 ==========
+    .btn-group {
+      display: flex;
+      gap: 10px; // 按钮之间的间距
+      justify-content: center; // 按钮组内部居中
+      align-items: flex-end; // 按钮向下对齐（和输入框底部齐平/略下）
+      margin-top: 24px; // 向下偏移的距离（可按需调整，比如16px/20px）
+
+      .search-btn, .reset-btn {
+        flex: 1; // 两个按钮平分列宽
+        width: 100%;
+        white-space: nowrap;
+      }
+    }
+  }
+
+  .list-content {
+    :deep(.el-table) {
+      --el-table-header-text-color: #303133;
+      --el-table-row-hover-bg-color: #f5f7fa;
+    }
   }
 
   .pagination {
     text-align: right;
+
+    :deep(.el-pagination) {
+      --el-pagination-button-bg-color: #fff;
+    }
   }
 }
 </style>
