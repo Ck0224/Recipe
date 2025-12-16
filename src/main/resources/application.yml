@@ -1,0 +1,39 @@
+spring:
+  # 数据库配置
+  datasource:
+    url: jdbc:mysql://localhost:3306/recipe_manager?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
+    username: root
+    password: 123456
+    driver-class-name: com.mysql.cj.jdbc.Driver
+  # JPA配置（核心：将jpa配置合并到spring层级下）
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+        # 修正1：合并dialect配置，消除警告
+        dialect: org.hibernate.dialect.MySQLDialect
+        jdbc.time_zone: Asia/Shanghai
+        # 修正2：添加懒加载配置（层级在spring.jpa下）
+        enable_lazy_load_no_trans: true
+    open-in-view: false
+  # 修正3：修复jackson拼写错误
+  jackson:
+    date-format: yyyy-MM-dd HH:mm:ss
+    time-zone: Asia/Shanghai
+    serialization:
+      write-dates-as-timestamps: false
+
+# JWT配置
+jwt:
+  secret: recipe-manager-2025-secret-key-256bit-strong-enough-for-production-12345678
+  expiration: 86400000
+  issuer: recipe-manager-api
+
+# 服务器配置
+server:
+  port: 8080
+  servlet:
+    context-path: /api
