@@ -158,7 +158,7 @@ public class RecipeController {
         }
     }
 
-    // ========== 兼容原有：仅查公开食谱的多条件查询 ==========
+    // ========== 兼容原有：仅查公开食谱的多条件查询（新增私有食谱过滤） ==========
     @GetMapping
     public ResponseEntity<Result<Page<RecipeDTO>>> getPublicRecipes(
             @RequestParam(required = false) Long id,          // 食谱ID（正整数）
@@ -166,12 +166,24 @@ public class RecipeController {
             @RequestParam(required = false) String category,  // 分类
             @RequestParam(required = false) String ingredient,// 食材
             @RequestParam(required = false) String difficulty,// 难度（String适配前端）
+            @RequestParam(required = false) Long userId,      // 新增：当前登录用户ID（前端传递）
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size) {
         try {
             Pageable pageable = PageRequest.of(page, size);
-            Page<Recipe> recipePage = recipeService.getRecipesByMultiConditions(
-                    id, title, category, ingredient, difficulty, pageable);
+            Page<Recipe> recipePage;
+
+            // 核心修改：添加私有食谱权限过滤
+            if (userId != null) {
+                // 1. 普通用户：查询「公开食谱」+「自己的私有食谱」
+                recipePage = recipeService.getUserVisibleRecipes(
+                        userId, id, title, category, difficulty, pageable);
+            } else {
+                // 2. 无用户ID（管理员/未登录）：仅查公开食谱
+                recipePage = recipeService.getRecipesByMultiConditions(
+                        id, title, category, ingredient, difficulty, pageable);
+            }
+
             Page<RecipeDTO> dtoPage = recipePage.map(this::convertToDTO);
             return ResponseEntity.ok(Result.success(dtoPage));
         } catch (Exception e) {
