@@ -1,28 +1,39 @@
 import { createApp } from 'vue'
 import { createPinia } from 'pinia'
+// ========== 核心修复：分开导入 ElementPlus 核心和组件 ==========
 import ElementPlus from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import 'element-plus/dist/index.css'
-import zhCn from 'element-plus/es/locale/lang/zh-cn' // 中文语言包
-// 新增：导入所有Element Plus图标
+import zhCn from 'element-plus/es/locale/lang/zh-cn'
 import * as ElementPlusIconsVue from '@element-plus/icons-vue'
 import router from '@/router'
 import App from './App.vue'
-import '@/assets/styles/global.scss' // 全局样式
+import '@/assets/styles/global.scss'
 
-// 创建应用
+// 1. 创建应用实例
 const app = createApp(App)
 
-// 新增：全局注册所有图标（解决图标不显示导致菜单渲染异常）
+// 2. 全局注册所有Element Plus图标
 for (const [key, component] of Object.entries(ElementPlusIconsVue)) {
     app.component(key, component)
 }
 
-// 安装插件
-app.use(createPinia())
-app.use(router)
+// 3. 注册Element Plus核心（带中文语言包）
 app.use(ElementPlus, {
-    locale: zhCn // 配置中文
+    locale: zhCn
 })
 
-// 挂载应用
+// 4. 注册Pinia和路由
+app.use(createPinia())
+app.use(router)
+
+// ========== 核心修复：挂载独立导出的组件 ==========
+// 错误写法：ElementPlus.ElMessage（ElementPlus对象下无此属性）
+// 正确写法：直接挂载导入的 ElMessage/ElMessageBox
+app.config.globalProperties.$message = ElMessage
+app.config.globalProperties.$msgbox = ElMessageBox
+app.config.globalProperties.$alert = ElMessageBox.alert
+app.config.globalProperties.$confirm = ElMessageBox.confirm
+
+// 5. 最后挂载应用
 app.mount('#app')

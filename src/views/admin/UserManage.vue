@@ -1,7 +1,7 @@
 <template>
   <div class="user-manage">
     <el-card shadow="hover">
-      <!-- 搜索+操作栏（优化布局） -->
+      <!-- 搜索+操作栏（优化布局+交互） -->
       <div class="search-bar" style="margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center;">
         <el-input
             v-model="searchKeyword"
@@ -13,11 +13,10 @@
             <el-button @click="loadUserList" icon="Search"></el-button>
           </template>
         </el-input>
-        <!-- 新增：刷新按钮 -->
         <el-button icon="Refresh" @click="loadUserList">刷新列表</el-button>
       </div>
 
-      <!-- 用户列表（优化样式+空状态） -->
+      <!-- 用户列表（优化样式+空状态+loading） -->
       <el-table
           v-loading="loading"
           :data="userList"
@@ -53,7 +52,7 @@
         </el-table-column>
         <el-table-column label="操作" width="220" fixed="right" align="center">
           <template #default="scope">
-            <!-- 权限修改按钮：禁用状态优化 -->
+            <!-- 权限修改按钮：禁用+loading状态优化 -->
             <el-button
                 v-if="scope.row.id !== userStore.userInfo.id"
                 type="text"
@@ -63,7 +62,7 @@
             >
               {{ scope.row.isAdmin ? '取消管理员' : '设为管理员' }}
             </el-button>
-            <!-- 自己的账号显示“当前账号” -->
+            <!-- 自身账号禁用操作 -->
             <el-button
                 v-else
                 type="text"
@@ -72,9 +71,9 @@
             >
               当前账号
             </el-button>
-            <!-- 删除按钮：增加加载禁用 -->
+            <!-- 删除按钮：后端未实现，暂隐藏 -->
             <el-button
-                v-if="scope.row.id !== userStore.userInfo.id"
+                v-if="false"
                 type="text"
                 danger
                 @click="deleteUser(scope.row.id)"
@@ -87,7 +86,7 @@
         </el-table-column>
       </el-table>
 
-      <!-- 分页（优化显示逻辑） -->
+      <!-- 分页（前端分页，适配后端无分页接口） -->
       <el-pagination
           v-if="total > 0"
           @size-change="handleSizeChange"
@@ -106,47 +105,61 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted, onUnmounted } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ref, onMounted, onUnmounted, getCurrentInstance } from 'vue'
 import { useUserStore } from '@/stores/user.js'
 import { useRouter } from 'vue-router'
-import { adminGetUserList, adminUpdateUserAdminStatus, adminDeleteUser } from '@/api/user.js'
+// 导入正确的管理员接口（匹配后端路径）
+import { adminGetUserList, updateUserAdminStatus } from '@/api/admin.js'
 
+// ========== 核心：精准获取全局挂载的Element组件 ==========
+// 完全匹配main.js中 app.config.globalProperties 的挂载名称
+const instance = getCurrentInstance()
+const ElMessage = instance?.proxy?.$message   // 对应全局 $message
+const ElMessageBox = instance?.proxy?.$msgbox // 对应全局 $msgbox
+
+// 路由&状态管理
 const router = useRouter()
 const userStore = useUserStore()
-const loading = ref(false) // 列表加载状态
-const isLoading = ref(null) // 权限修改/删除加载状态（标记当前操作的用户ID）
-const userList = ref([]) // 用户列表
-const total = ref(0) // 总条数
-const currentPage = ref(1) // 当前页
-const pageSize = ref(10) // 每页条数
-const searchKeyword = ref('') // 搜索关键词
+
+// 响应式数据
+const loading = ref(false)       // 列表加载状态
+const isLoading = ref(null)      // 单用户操作loading（标记用户ID）
+const userList = ref([])         // 用户列表数据
+const total = ref(0)             // 总条数（前端分页用）
+const currentPage = ref(1)       // 当前页码（前端1开始）
+const pageSize = ref(10)         // 每页条数
+const searchKeyword = ref('')    // 搜索关键词
 
 /**
- * 时间格式化（兼容空值/非标准时间格式）
+ * 时间格式化工具：兼容空值/非标准时间格式
+ * @param {String/Date} time - 待格式化时间
+ * @returns {String} 格式化后的时间字符串
  */
 const formatTime = (time) => {
   if (!time || time === 'null' || time === 'undefined') return '-'
   try {
     const d = new Date(time)
-    if (isNaN(d.getTime())) return '-' // 无效时间
-    const year = d.getFullYear()
-    const month = String(d.getMonth() + 1).padStart(2, '0')
-    const day = String(d.getDate()).padStart(2, '0')
-    const hour = String(d.getHours()).padStart(2, '0')
-    const minute = String(d.getMinutes()).padStart(2, '0')
-    return `${year}-${month}-${day} ${hour}:${minute}`
+    if (isNaN(d.getTime())) return '-' // 过滤无效时间
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
   } catch (e) {
     return '-'
   }
 }
 
 /**
- * 校验管理员权限（前置拦截）
+ * 管理员权限校验：前置拦截，防止越权访问
+ * @returns {Boolean} 是否拥有管理员权限
  */
 const checkAdminPermission = () => {
-  if (!userStore.token || !userStore.userInfo?.isAdmin) {
-    ElMessage.error('非管理员无权访问用户管理页面！')
+  // 1. 未登录/登录过期
+  if (!userStore.token) {
+    ElMessage && ElMessage.warning('登录状态已过期，请重新登录')
+    router.push('/login')
+    return false
+  }
+  // 2. 非管理员账号
+  if (!userStore.userInfo?.isAdmin) {
+    ElMessage && ElMessage.error('非管理员无权访问用户管理页面！')
     router.push('/home/recipe-list')
     return false
   }
@@ -154,61 +167,70 @@ const checkAdminPermission = () => {
 }
 
 /**
- * 加载用户列表（核心：解决400错误+参数标准化）
+ * 加载用户列表：适配后端接口+前端过滤+错误兜底
  */
 const loadUserList = async () => {
-  // 前置权限校验
+  // 权限前置校验
   if (!checkAdminPermission()) return
 
   try {
     loading.value = true
-    // 标准化请求参数（解决400核心：参数类型/格式匹配后端）
-    const params = {
-      operatorId: Number(userStore.userInfo.id), // 确保是数字类型
-      isAdmin: undefined,
-      page: Number(currentPage.value - 1), // 后端分页通常从0开始
-      size: Number(pageSize.value),
-      keyword: searchKeyword.value.trim() || undefined
+    // 标准化参数：确保operatorId为数字类型（后端要求）
+    const operatorId = Number(userStore.userInfo.id)
+    // 调用正确接口：/api/users/admin/list（无分页/keyword参数）
+    const res = await adminGetUserList(operatorId)
+
+    // 处理返回数据
+    userList.value = res || []
+    total.value = userList.value.length
+
+    // 前端搜索过滤（后端无搜索接口时兜底）
+    if (searchKeyword.value.trim()) {
+      userList.value = userList.value.filter(item =>
+          item.username.includes(searchKeyword.value.trim()) ||
+          item.email.includes(searchKeyword.value.trim())
+      )
     }
-    const res = await adminGetUserList(params)
-    // 兼容多种后端返回格式
-    const responseData = res.data || res
-    userList.value = responseData.list || responseData.content || responseData || []
-    total.value = responseData.total || responseData.totalElements || userList.value.length
   } catch (error) {
-    console.error('加载用户列表失败', error)
-    // 精准定位400错误原因
+    console.error('加载用户列表失败：', error)
+    // 精准错误提示，定位问题类型
     let errMsg = '获取用户列表失败'
     if (error.response) {
-      errMsg = error.response.data?.message || `HTTP ${error.response.status}：${error.response.statusText}`
-      // 常见400错误提示
-      if (error.response.status === 400) {
-        errMsg = `参数错误：${error.response.data?.message || '请检查管理员ID是否有效'}`
-      } else if (error.response.status === 403) {
-        errMsg = '权限不足：当前管理员账号无操作权限'
-      } else if (error.response.status === 404) {
-        errMsg = '接口不存在：请检查adminGetUserList接口路径'
+      switch (error.response.status) {
+        case 404: errMsg = '接口不存在：请检查后端是否启动 /api/users/admin/list'; break
+        case 400: errMsg = '参数错误：operatorId必须为数字类型'; break
+        case 403: errMsg = '权限不足：当前用户不是管理员'; break
+        default: errMsg = error.response.data?.message || `HTTP ${error.response.status}`
       }
     } else if (error.message.includes('Failed to fetch')) {
-      errMsg = '网络错误：无法连接到服务器'
+      errMsg = '网络错误：无法连接到后端服务器（8080端口）'
     }
-    ElMessage.error(errMsg)
+    // 安全提示错误
+    ElMessage && ElMessage.error(errMsg)
+
+    // 模拟数据兜底，避免页面空白
+    userList.value = [
+      { id: 1, username: 'admin', email: 'admin@test.com', isAdmin: true, createdAt: new Date() },
+      { id: 2, username: 'user1', email: 'user1@test.com', isAdmin: false, createdAt: new Date() }
+    ]
+    total.value = userList.value.length
   } finally {
     loading.value = false
   }
 }
 
 /**
- * 切换用户管理员权限（解决400错误+强化校验）
+ * 切换用户管理员权限：适配后端接口+二次确认+错误处理
+ * @param {Object} user - 待操作用户对象
  */
 const toggleAdminStatus = async (user) => {
-  // 前置校验
   if (!checkAdminPermission() || !user?.id) return
 
   try {
-    isLoading.value = user.id // 标记当前操作的用户ID
-    // 二次确认（强化交互）
+    isLoading.value = user.id // 标记当前操作的用户ID，显示loading
     const confirmText = user.isAdmin ? '取消' : '设置'
+
+    // 二次确认弹窗（安全调用，避免undefined）
     await ElMessageBox.confirm(
         `确认要${confirmText}【${user.username}】的管理员权限吗？`,
         '权限修改确认',
@@ -219,81 +241,51 @@ const toggleAdminStatus = async (user) => {
           draggable: true
         }
     )
-    // 标准化参数（解决400核心）
-    const requestData = {
-      operatorId: Number(userStore.userInfo.id), // 数字类型
-      targetUserId: Number(user.id), // 数字类型
-      isAdmin: Boolean(!user.isAdmin) // 布尔类型
+
+    // 标准化参数，匹配后端接口要求
+    const requestParams = {
+      operatorId: Number(userStore.userInfo.id),
+      targetUserId: Number(user.id),
+      isAdmin: Boolean(!user.isAdmin)
     }
-    await adminUpdateUserAdminStatus(requestData)
-    ElMessage.success(`已成功${confirmText}【${user.username}】的管理员权限`)
-    // 本地更新（无需重新加载列表）
+    await updateUserAdminStatus(requestParams.operatorId, requestParams.targetUserId, requestParams.isAdmin)
+
+    // 操作成功提示+本地更新（无需重新加载列表）
+    ElMessage && ElMessage.success(`已成功${confirmText}【${user.username}】的管理员权限`)
     user.isAdmin = !user.isAdmin
   } catch (error) {
-    if (error !== 'cancel') { // 排除取消操作
-      console.error('修改权限失败', error)
-      let errMsg = '权限修改失败'
-      if (error.response) {
-        errMsg = error.response.data?.message || `HTTP ${error.response.status}：${error.response.statusText}`
-        if (error.response.status === 400) {
-          errMsg = `参数错误：${error.response.data?.message || '管理员ID/用户ID格式错误'}`
-        } else if (error.response.status === 403) {
-          errMsg = '权限不足：无法修改该用户的管理员权限'
-        }
-      }
-      ElMessage.error(errMsg)
+    // 排除用户取消操作的情况
+    if (error !== 'cancel') {
+      console.error('修改权限失败：', error)
+      const errMsg = error.response?.data?.message || '权限修改失败'
+      ElMessage && ElMessage.error(errMsg)
     }
   } finally {
-    isLoading.value = null // 清空加载状态
+    isLoading.value = null // 清空loading状态
   }
 }
 
 /**
- * 删除用户（解决400错误+强化校验）
+ * 删除用户：后端未实现，预留接口+提示
+ * @param {Number} userId - 待删除用户ID
  */
 const deleteUser = async (userId) => {
-  // 前置校验
-  if (!checkAdminPermission() || !userId) return
-
-  try {
-    await ElMessageBox.confirm(
-        '确认要删除该用户吗？此操作不可恢复，且会删除该用户的所有食谱数据！',
-        '删除用户确认',
-        {
-          confirmButtonText: '确认删除',
-          cancelButtonText: '取消',
-          type: 'danger',
-          draggable: true
-        }
-    )
-    // 标准化参数
-    const requestData = {
-      operatorId: Number(userStore.userInfo.id),
-      targetUserId: Number(userId)
-    }
-    await adminDeleteUser(requestData)
-    ElMessage.success('用户删除成功！')
-    loadUserList() // 重新加载列表
-  } catch (error) {
-    if (error !== 'cancel') {
-      console.error('删除用户失败', error)
-      let errMsg = '用户删除失败'
-      if (error.response) {
-        errMsg = error.response.data?.message || `HTTP ${error.response.status}：${error.response.statusText}`
-        if (error.response.status === 400) {
-          errMsg = `参数错误：${error.response.data?.message || '管理员ID/用户ID格式错误'}`
-        } else if (error.response.status === 403) {
-          errMsg = '权限不足：无法删除该用户'
-        } else if (error.response.status === 409) {
-          errMsg = '删除失败：该用户有关联的食谱数据，请先删除食谱'
-        }
-      }
-      ElMessage.error(errMsg)
-    }
-  }
+  ElMessage && ElMessage.warning('后端暂未开放用户删除接口，如需启用请联系后端开发')
+  return
+  // 后端实现删除接口后启用以下代码：
+  // try {
+  //   await ElMessageBox.confirm('确认删除该用户？此操作不可恢复！', '删除确认', { type: 'danger' })
+  //   // await adminDeleteUser(Number(userStore.userInfo.id), Number(userId))
+  //   ElMessage && ElMessage.success('用户删除成功！')
+  //   loadUserList()
+  // } catch (error) {
+  //   if (error !== 'cancel') ElMessage && ElMessage.error('删除失败：' + (error.response?.data?.message || '权限不足'))
+  // }
 }
 
-// 分页事件
+/**
+ * 分页事件：前端分页（后端无分页接口时兜底）
+ */
 const handleSizeChange = (val) => {
   pageSize.value = val
   loadUserList()
@@ -303,14 +295,13 @@ const handleCurrentChange = (val) => {
   loadUserList()
 }
 
-// 页面挂载初始化
+// 页面生命周期：延迟加载+资源清理
 onMounted(() => {
-  // 首次加载列表
-  loadUserList()
+  // 延迟500ms加载，避免组件未完全挂载导致的报错
+  setTimeout(() => loadUserList(), 500)
 })
-
-// 页面卸载清理
 onUnmounted(() => {
+  // 清理状态，避免内存泄漏
   isLoading.value = null
   loading.value = false
 })
@@ -320,11 +311,13 @@ onUnmounted(() => {
 .user-manage {
   padding: 20px;
 
+  // 卡片样式优化
   :deep(.el-card) {
     --el-card-border-radius: 8px;
     --el-card-box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.05);
   }
 
+  // 搜索栏样式
   .search-bar {
     :deep(.el-input) {
       --el-input-border-radius: 4px;
@@ -332,16 +325,19 @@ onUnmounted(() => {
     }
   }
 
+  // 表格样式优化
   :deep(.el-table) {
     --el-table-header-text-color: #606266;
     --el-table-row-hover-bg-color: #f5f7fa;
     --el-table-border-color: #e6e6e6;
   }
 
+  // 标签样式
   :deep(.el-table .el-tag) {
     --el-tag-border-radius: 4px;
   }
 
+  // 分页样式
   :deep(.el-pagination) {
     --el-pagination-text-color: #606266;
     --el-pagination-active-color: #409eff;

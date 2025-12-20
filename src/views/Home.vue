@@ -7,7 +7,7 @@
           <h2>食谱管理系统</h2>
         </div>
         <el-menu
-            default-active="/home/recipe-list"
+            :default-active="route.fullPath"
             class="sidebar-menu"
             background-color="#2e3b4e"
             text-color="#fff"
@@ -34,8 +34,12 @@
             <el-icon><User /></el-icon>
             <template #title>个人中心</template>
           </el-menu-item>
-          <!-- 5. 管理员面板（仅管理员显示） -->
-          <el-menu-item index="/home/admin" v-if="!!userStore.userInfo?.isAdmin">
+          <!-- 5. 管理员面板（核心优化：手动跳转+指向子路由） -->
+          <el-menu-item
+              index="/home/admin/user-manage"
+              v-if="!!userStore.userInfo?.isAdmin"
+              @click="handleAdminClick"
+          >
             <el-icon><Setting /></el-icon>
             <template #title>管理员面板</template>
           </el-menu-item>
@@ -75,16 +79,30 @@
 
 <script setup>
 import { useUserStore } from '@/stores/user'
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
 import { Menu, Plus, User, UserFilled, Setting, SwitchButton } from '@element-plus/icons-vue'
 
 const userStore = useUserStore()
 const router = useRouter()
+const route = useRoute()
 
 // 退出登录
 const handleLogout = () => {
   userStore.logout()
   router.push('/login')
+}
+
+// 新增：管理员面板手动跳转逻辑（绕过 el-menu 路由解析 bug）
+const handleAdminClick = () => {
+  router.push({
+    path: '/home/admin/user-manage',
+    replace: true // 替换历史记录，避免路由冗余
+  }).catch(err => {
+    // 仅捕获非重复导航的错误
+    if (err.name !== 'NavigationDuplicated') {
+      console.error('管理员面板跳转失败：', err)
+    }
+  })
 }
 </script>
 

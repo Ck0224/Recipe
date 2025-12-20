@@ -1,7 +1,7 @@
 <template>
   <div class="recipe-list">
     <el-card>
-      <!-- 搜索筛选栏（保留原有逻辑）-->
+      <!-- 搜索筛选栏（保留原有逻辑，已删除隐私筛选框）-->
       <div class="search-bar">
         <el-row :gutter="20" type="flex" justify="center">
           <!-- 原有筛选项：ID/名称/分类/食材/难度 -->
@@ -55,19 +55,6 @@
             </el-select>
           </el-col>
 
-          <!-- 私有食谱筛选（仅普通用户显示） -->
-          <el-col v-if="!userStore.userInfo.isAdmin" :span="4">
-            <el-select
-                v-model="searchForm.isPrivate"
-                placeholder="食谱隐私状态"
-                clearable
-                @change="loadRecipeList"
-            >
-              <el-option label="公开食谱" value="false"></el-option>
-              <el-option label="我的私有食谱" value="true"></el-option>
-            </el-select>
-          </el-col>
-
           <!-- 按钮区域 -->
           <el-col :span="4" class="btn-group">
             <el-button
@@ -102,7 +89,7 @@
         >
           <el-table-column prop="id" label="ID" width="80" align="center"></el-table-column>
           <el-table-column prop="title" label="食谱名称" min-width="200">
-            <!-- 私有食谱标记 -->
+            <!-- 私有食谱标记（仅展示，不筛选） -->
             <template #default="scope">
               <span>
                 {{ scope.row.title }}
@@ -166,7 +153,7 @@
 import { ref, reactive, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { getRecipeList } from '@/api/recipe' // 移除deleteRecipeApi导入
+import { getRecipeList } from '@/api/recipe'
 import { useUserStore } from '@/stores/user'
 
 const router = useRouter()
@@ -178,14 +165,13 @@ const size = ref(10)
 const total = ref(0)
 const loading = ref(false)
 
-// 搜索表单：保留isPrivate筛选
+// 搜索表单：删除冗余的isPrivate字段
 const searchForm = reactive({
   id: '',
   title: '',
   category: '',
   ingredient: '',
-  difficulty: '',
-  isPrivate: ''
+  difficulty: ''
 })
 
 const validateId = () => {
@@ -195,7 +181,7 @@ const validateId = () => {
   }
 }
 
-// 加载食谱列表（保留原有逻辑）
+// 加载食谱列表：传递userId参数，删除isPrivate参数
 const loadRecipeList = async () => {
   if (searchForm.id !== '' && searchForm.id <= 0) {
     ElMessage.warning('食谱ID必须是正整数，请重新输入！')
@@ -212,8 +198,7 @@ const loadRecipeList = async () => {
       category: searchForm.category.trim() || undefined,
       ingredient: searchForm.ingredient.trim() || undefined,
       difficulty: searchForm.difficulty || undefined,
-      userId: userStore.userInfo.isAdmin ? undefined : userStore.userInfo.id,
-      isPrivate: searchForm.isPrivate || undefined
+      userId: userStore.userInfo.id // 核心：传递当前用户ID（管理员/普通用户都传）
     }
     const res = await getRecipeList(params)
     recipeList.value = res.content || []
@@ -232,7 +217,6 @@ const resetSearch = () => {
   searchForm.category = ''
   searchForm.ingredient = ''
   searchForm.difficulty = ''
-  searchForm.isPrivate = ''
   page.value = 0
   loadRecipeList()
 }
@@ -255,8 +239,6 @@ const handleRowClick = (row) => {
 const viewDetail = (id) => {
   router.push(`/home/recipe-detail/${id}`)
 }
-
-// 已删除deleteRecipe函数（无需保留）
 
 onMounted(() => {
   loadRecipeList()

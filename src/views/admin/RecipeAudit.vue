@@ -1,6 +1,6 @@
 <template>
   <div class="recipe-audit">
-    <!-- 搜索筛选栏（优化布局+样式） -->
+    <!-- 搜索筛选栏 -->
     <div class="search-bar" style="margin-bottom: 20px; padding: 10px; background: #f8f9fa; border-radius: 8px;">
       <el-row :gutter="20" type="flex" justify="start" align="center">
         <el-col :span="4">
@@ -62,15 +62,16 @@
       </el-row>
     </div>
 
-    <!-- 食谱列表（优化样式+空状态） -->
+    <!-- 食谱列表 -->
     <el-table
         :data="recipeList"
         border
         stripe
-        style="width: 100%; border-radius: 8px; overflow: hidden;"
+        style="width: 100%; border-radius: 8px;"
         v-loading="loading"
         empty-text="暂无符合条件的食谱数据，请调整搜索条件"
         @row-click="handleRowClick"
+        fit="false"
     >
       <el-table-column prop="id" label="食谱ID" width="80" align="center"></el-table-column>
       <el-table-column prop="title" label="食谱名称" min-width="200">
@@ -101,40 +102,42 @@
           {{ formatTime(scope.row.createdAt) }}
         </template>
       </el-table-column>
-      <el-table-column label="操作" width="300" align="center">
+      <!-- 核心优化：缩小操作列宽度+紧凑布局 -->
+      <el-table-column label="操作" min-width="220" align="center" fixed="right">
         <template #default="scope">
-          <el-button
-              type="primary"
-              size="small"
-              icon="View"
-              @click="viewDetail(scope.row.id)"
-          >
-            查看
-          </el-button>
-          <!-- 编辑→更新，跳转独立的编辑页面 -->
-          <el-button
-              type="warning"
-              size="small"
-              icon="Edit"
-              @click="updateRecipe(scope.row.id)"
-              style="margin-left: 10px;"
-          >
-            更新
-          </el-button>
-          <el-button
-              type="danger"
-              size="small"
-              icon="Delete"
-              @click="deleteRecipe(scope.row.id)"
-              style="margin-left: 10px;"
-          >
-            删除
-          </el-button>
+          <div style="display: flex; gap: 4px; align-items: center; flex-wrap: nowrap;">
+            <el-button
+                type="primary"
+                size="small"
+                icon="View"
+                @click="viewDetail(scope.row.id)"
+            >
+              查看
+            </el-button>
+            <el-button
+                type="warning"
+                size="small"
+                icon="Edit"
+                @click="updateRecipe(scope.row.id)"
+            >
+              更新
+            </el-button>
+            <el-button
+                type="danger"
+                size="small"
+                icon="Delete"
+                @click="deleteRecipe(scope.row.id)"
+                :loading="deleteLoading"
+                style="display: inline-block !important;"
+            >
+              删除
+            </el-button>
+          </div>
         </template>
       </el-table-column>
     </el-table>
 
-    <!-- 分页控件（优化样式+位置） -->
+    <!-- 分页控件 -->
     <div class="pagination mt-4" style="text-align: right; padding: 10px 0;">
       <el-pagination
           @size-change="handleSizeChange"
@@ -153,15 +156,20 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted, onUnmounted } from 'vue'
+import { ref, reactive, onMounted, onUnmounted, getCurrentInstance } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { ElMessage, ElMessageBox } from 'element-plus'
-import { getAdminRecipeList, deleteRecipe as deleteRecipeApi } from '@/api/admin'
 import { useUserStore } from '@/stores/user'
+// 替换为通用食谱API，修复400错误
+import { getRecipeList, deleteRecipe as deleteRecipeApi } from '@/api/recipe'
 
 const router = useRouter()
 const route = useRoute()
 const userStore = useUserStore()
+
+// 全局获取ElMessage/ElMessageBox，避免undefined
+const instance = getCurrentInstance()
+const ElMessage = instance?.proxy?.$message
+const ElMessageBox = instance?.proxy?.$msgbox
 
 // 响应式数据
 const recipeList = ref([])
@@ -169,6 +177,7 @@ const page = ref(0)
 const size = ref(10)
 const total = ref(0)
 const loading = ref(false)
+const deleteLoading = ref(false)
 
 // 搜索表单
 const searchForm = reactive({
@@ -202,7 +211,7 @@ const formatTime = (time) => {
  */
 const checkAdminPermission = () => {
   if (!userStore.token || !userStore.userInfo?.isAdmin) {
-    ElMessage.error('非管理员无权访问食谱管理页面！')
+    ElMessage && ElMessage.error('非管理员无权访问食谱管理页面！')
     router.push('/home/recipe-list')
     return false
   }
@@ -214,26 +223,25 @@ const checkAdminPermission = () => {
  */
 const validateId = () => {
   if (searchForm.id !== '' && (isNaN(searchForm.id) || searchForm.id <= 0)) {
-    ElMessage.warning('食谱ID必须是正整数！')
+    ElMessage && ElMessage.warning('食谱ID必须是正整数！')
     searchForm.id = ''
   }
 }
 
 /**
- * 加载所有食谱列表（管理员权限）
+ * 加载所有食谱列表（核心修复：管理员添加userId参数，让后端识别权限）
  */
 const loadRecipeList = async () => {
-  // 前置权限校验
   if (!checkAdminPermission()) return
 
   if (searchForm.id !== '' && searchForm.id <= 0) {
-    ElMessage.warning('食谱ID必须是正整数，请重新输入！')
+    ElMessage && ElMessage.warning('食谱ID必须是正整数，请重新输入！')
     return
   }
 
   try {
     loading.value = true
-    // 标准化请求参数（数字类型+空值处理）
+    // 核心修复：管理员主动传递userId参数（自己的ID），让后端识别管理员权限
     const params = {
       page: Number(page.value),
       size: Number(size.value),
@@ -241,30 +249,31 @@ const loadRecipeList = async () => {
       title: searchForm.title.trim() || undefined,
       username: searchForm.username.trim() || undefined,
       isPrivate: searchForm.isPrivate || undefined,
-      operatorId: Number(userStore.userInfo.id) // 管理员ID，供后端校验
+      // 新增：管理员传递自己的ID，后端判断权限后返回所有食谱（含私有）
+      userId: Number(userStore.userInfo.id)
     }
-    const res = await getAdminRecipeList(params)
+    // 调用通用食谱接口
+    const res = await getRecipeList(params)
     // 兼容多种后端返回格式
     const responseData = res.data || res
     recipeList.value = responseData.content || responseData.list || responseData || []
     total.value = responseData.totalElements || responseData.total || 0
   } catch (error) {
     console.error('加载食谱列表失败', error)
-    // 精准错误提示
     let errMsg = '加载食谱列表失败'
     if (error.response) {
       errMsg = error.response.data?.message || `HTTP ${error.response.status}：${error.response.statusText}`
       if (error.response.status === 400) {
-        errMsg = `参数错误：${error.response.data?.message || '管理员ID/食谱ID格式错误'}`
+        errMsg = `参数错误：${error.response.data?.message || '管理员ID格式错误，请检查登录状态'}`
       } else if (error.response.status === 403) {
         errMsg = '权限不足：当前管理员无查看所有食谱的权限'
       } else if (error.response.status === 404) {
-        errMsg = '接口不存在：请检查getAdminRecipeList接口路径'
+        errMsg = '接口不存在：请检查recipe.js中getRecipeList的url配置'
       }
     } else if (error.message.includes('Failed to fetch')) {
       errMsg = '网络错误：无法连接到服务器'
     }
-    ElMessage.error(errMsg)
+    ElMessage && ElMessage.error(errMsg)
   } finally {
     loading.value = false
   }
@@ -311,26 +320,25 @@ const handleRowClick = (row) => {
  */
 const viewDetail = (id) => {
   if (!id) {
-    ElMessage.warning('食谱ID异常！')
+    ElMessage && ElMessage.warning('食谱ID异常！')
     return
   }
   router.push({ path: `/home/recipe-detail/${id}` })
 }
 
 /**
- * 更新食谱（跳转独立的编辑页面）
+ * 更新食谱（跳转编辑页）
  */
 const updateRecipe = (id) => {
   if (!id) {
-    ElMessage.warning('食谱ID异常！')
+    ElMessage && ElMessage.warning('食谱ID异常！')
     return
   }
-  // 跳转到独立的编辑页面（后续需配置路由）
   router.push({ path: `/home/recipe-edit/${id}` })
 }
 
 /**
- * 删除食谱（管理员可删除任意食谱）
+ * 删除食谱（修复参数传递：管理员删除需传递currentUserId）
  */
 const deleteRecipe = async (id) => {
   if (!id || !checkAdminPermission()) return
@@ -346,10 +354,11 @@ const deleteRecipe = async (id) => {
           draggable: true
         }
     )
-    // 标准化参数
+    deleteLoading.value = true
+    // 修复：管理员删除需要传递currentUserId参数，让后端验证权限
     await deleteRecipeApi(id, Number(userStore.userInfo.id))
-    ElMessage.success('食谱删除成功！')
-    loadRecipeList() // 重新加载列表
+    ElMessage && ElMessage.success('食谱删除成功！')
+    loadRecipeList()
   } catch (error) {
     if (error !== 'cancel') {
       console.error('删除食谱失败', error)
@@ -364,20 +373,21 @@ const deleteRecipe = async (id) => {
           errMsg = '删除失败：该食谱存在关联数据，无法直接删除'
         }
       }
-      ElMessage.error(errMsg)
+      ElMessage && ElMessage.error(errMsg)
     }
+  } finally {
+    deleteLoading.value = false
   }
 }
 
-// 页面挂载时加载数据
+// 页面挂载/卸载
 onMounted(() => {
-  // 首次加载列表
   loadRecipeList()
 })
 
-// 页面卸载清理
 onUnmounted(() => {
   loading.value = false
+  deleteLoading.value = false
   recipeList.value = []
 })
 </script>
@@ -385,6 +395,9 @@ onUnmounted(() => {
 <style scoped lang="scss">
 .recipe-audit {
   padding: 20px;
+  width: 100%;
+  box-sizing: border-box;
+  overflow: auto;
 
   .search-bar {
     :deep(.el-input) {
@@ -404,6 +417,7 @@ onUnmounted(() => {
     --el-table-row-hover-bg-color: #f5f7fa;
     --el-table-border-color: #e6e6e6;
     box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.05);
+    width: 100%;
   }
 
   :deep(.el-table .el-tag) {
@@ -416,7 +430,13 @@ onUnmounted(() => {
     --el-pagination-button-bg-color: #fff;
   }
 
-  // 可点击的食谱名称样式
+  // 缩小操作按钮内边距，进一步紧凑布局
+  :deep(.el-table-column--operation .el-button) {
+    display: inline-block !important;
+    margin: 0 2px !important;
+    padding: 5px 8px !important;
+  }
+
   :deep(.el-table-cell span[style*="cursor: pointer"]) {
     &:hover {
       text-decoration: underline;
