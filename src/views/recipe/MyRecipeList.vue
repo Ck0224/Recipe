@@ -14,11 +14,11 @@
         </el-button>
       </div>
 
-      <!-- 搜索筛选栏 -->
+      <!-- 搜索筛选栏（删除隐私状态筛选框）-->
       <div class="search-bar">
         <el-row :gutter="20" type="flex" justify="center">
-          <!-- 食谱名称搜索 -->
-          <el-col :span="6">
+          <!-- 食谱名称搜索：调整宽度从6→9，填补空白 -->
+          <el-col :span="9">
             <el-input
                 v-model="searchForm.title"
                 placeholder="请输入食谱名称"
@@ -26,8 +26,8 @@
                 @keyup.enter="loadMyRecipeList"
             ></el-input>
           </el-col>
-          <!-- 分类搜索 -->
-          <el-col :span="6">
+          <!-- 分类搜索：调整宽度从6→9，填补空白 -->
+          <el-col :span="9">
             <el-input
                 v-model="searchForm.category"
                 placeholder="请输入分类"
@@ -35,19 +35,7 @@
                 @keyup.enter="loadMyRecipeList"
             ></el-input>
           </el-col>
-          <!-- 隐私状态筛选 -->
-          <el-col :span="6">
-            <el-select
-                v-model="searchForm.isPrivate"
-                placeholder="隐私状态"
-                clearable
-                @change="loadMyRecipeList"
-            >
-              <el-option label="公开食谱" value="false"></el-option>
-              <el-option label="私有食谱" value="true"></el-option>
-            </el-select>
-          </el-col>
-          <!-- 操作按钮 -->
+          <!-- 操作按钮：宽度保持6不变 -->
           <el-col :span="6" class="btn-group">
             <el-button
                 type="primary"
@@ -68,7 +56,7 @@
         </el-row>
       </div>
 
-      <!-- 我的食谱列表 -->
+      <!-- 我的食谱列表（保留私有标签展示，仅删除筛选功能） -->
       <div class="list-content">
         <el-table
             :data="myRecipeList"
@@ -111,7 +99,6 @@
               >
                 查看
               </el-button>
-              <!-- 编辑→更新，跳转独立的编辑页面路由 -->
               <el-button
                   type="warning"
                   size="small"
@@ -174,15 +161,14 @@ const total = ref(0)
 const loading = ref(false)
 const deleteLoading = ref(false) // 新增：删除按钮加载状态
 
-// 搜索表单
+// 搜索表单：删除isPrivate字段
 const searchForm = reactive({
   title: '',
-  category: '',
-  isPrivate: ''
+  category: ''
 })
 
 /**
- * 加载我的食谱列表（保留原有逻辑）
+ * 加载我的食谱列表（删除isPrivate参数）
  */
 const loadMyRecipeList = async () => {
   // 前置校验：确保用户ID存在
@@ -199,8 +185,8 @@ const loadMyRecipeList = async () => {
       size: size.value,
       userId: userStore.userInfo.id,
       title: searchForm.title.trim() || undefined,
-      category: searchForm.category.trim() || undefined,
-      isPrivate: searchForm.isPrivate || undefined
+      category: searchForm.category.trim() || undefined
+      // 移除isPrivate参数
     }
     const res = await getMyRecipeList(params)
     // 兼容不同的后端返回格式
@@ -221,12 +207,11 @@ const loadMyRecipeList = async () => {
 }
 
 /**
- * 重置搜索条件
+ * 重置搜索条件（删除isPrivate重置）
  */
 const resetSearch = () => {
   searchForm.title = ''
   searchForm.category = ''
-  searchForm.isPrivate = ''
   page.value = 0
   loadMyRecipeList()
 }
@@ -305,7 +290,7 @@ const deleteRecipe = async (recipeId) => {
     // 4. 调用删除接口
     await deleteRecipeApi(recipeId, userId);
     ElMessage.success('删除食谱成功！');
-    // 5. 重新加载列表（修复函数名：loadMyRecipeList）
+    // 5. 重新加载列表
     loadMyRecipeList();
   } catch (error) {
     // 过滤取消确认的错误

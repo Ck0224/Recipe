@@ -60,11 +60,24 @@ export function updateUserInfo(data) {
     })
 }
 
-// 上传头像（匹配后端：PUT /api/users/{userId}/avatar）
-export function uploadAvatar(formData) {
+// 上传头像（仅接收图片URL，适配后端逻辑）
+export function uploadAvatar(data) {
     return service({
-        url: `/api/users/${formData.get('userId')}/avatar`,
+        url: `/api/users/${data.userId}/avatar`,
         method: 'put',
+        params: {
+            avatarUrl: data.avatarUrl // 仅传图片URL给后端
+        }
+    })
+}
+
+// ========== 仅保留这一个图片上传接口（你的后端实际接口） ==========
+export function uploadImage(file) {
+    const formData = new FormData()
+    formData.append('file', file)
+    return service({
+        url: '/api/upload/image', // 恢复/api前缀
+        method: 'post',
         data: formData,
         headers: {
             'Content-Type': 'multipart/form-data'

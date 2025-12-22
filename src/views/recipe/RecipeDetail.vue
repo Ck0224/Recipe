@@ -1,8 +1,6 @@
 <template>
-  <!-- 完全保留原有模板，不做任何修改 -->
   <div class="recipe-detail">
     <el-card v-loading="loading">
-      <!-- 返回按钮 + 编辑按钮（完全保留原有逻辑） -->
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
         <el-button
             icon="ArrowLeft"
@@ -20,7 +18,6 @@
         </el-button>
       </div>
 
-      <!-- 以下所有模板内容完全保留 -->
       <div class="basic-info">
         <el-row :gutter="20">
           <el-col :span="6">
@@ -86,6 +83,7 @@
         </el-row>
       </div>
 
+      <!-- ========== 改回原有ingredients字段 ========== -->
       <div class="ingredients-section mt-4">
         <h3 class="section-title">
           <el-icon><ShoppingCart /></el-icon>
@@ -99,7 +97,11 @@
               style="width: 100%"
           >
             <el-table-column prop="name" label="食材名称" width="150"></el-table-column>
-            <el-table-column prop="quantity" label="数量" width="100" align="center"></el-table-column>
+            <el-table-column label="数量" width="100" align="center">
+              <template #default="scope">
+                {{ Number(scope.row.quantity) }}
+              </template>
+            </el-table-column>
             <el-table-column prop="unit" label="单位" width="100" align="center"></el-table-column>
             <el-table-column prop="note" label="备注" min-width="200"></el-table-column>
           </el-table>
@@ -109,6 +111,7 @@
         </div>
       </div>
 
+      <!-- ========== 改回原有steps字段 ========== -->
       <div class="steps-section mt-4">
         <h3 class="section-title">
           <el-icon><List /></el-icon>
@@ -148,7 +151,6 @@
 </template>
 
 <script setup>
-// 完全保留原有导入和变量定义（包括编辑按钮权限判断）
 import { ref, computed, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
@@ -164,23 +166,19 @@ const route = useRoute()
 const userStore = useUserStore()
 
 const loading = ref(false)
+// ========== 改回原有初始化字段 ==========
 const recipeDetail = ref({
   ingredients: [],
   steps: [],
   tagList: []
 })
 
-// 完全保留原有编辑按钮权限判断（不做任何修改）
 const showEditBtn = computed(() => {
-  // 未登录/无食谱数据 → 不显示
   if (!userStore.token || !recipeDetail.value.id) return false
-  // 管理员 → 显示
   if (userStore.userInfo.isAdmin) return true
-  // 创建者 → 显示
   return recipeDetail.value.user?.id === userStore.userInfo.id
 })
 
-// 完全保留原有跳转逻辑（不做任何修改）
 const goToEdit = () => {
   if (!recipeDetail.value.id) {
     ElMessage.warning('食谱ID异常，无法编辑！')
@@ -192,7 +190,6 @@ const goToEdit = () => {
   })
 }
 
-// 完全保留原有工具函数（不做任何修改）
 const formatTime = (timeStr) => {
   if (!timeStr) return '-'
   try {
@@ -235,7 +232,6 @@ const goBack = () => {
   }
 }
 
-// ========== 仅修改此处：加载食谱详情的Data赋值逻辑（移除Result包装判断） ==========
 const loadRecipeDetail = async () => {
   try {
     loading.value = true
@@ -255,17 +251,30 @@ const loadRecipeDetail = async () => {
     const currentUserId = userStore.userInfo.id || 1
     const res = await getRecipeDetail(recipeId, Number(currentUserId))
 
-    // 核心修改：直接赋值原始数据，删除所有Result包装（success/data）的判断逻辑
-    // 适配编辑后后端返回的原始食谱数据，不再解析success字段
+    // 核心：直接赋值原有字段，打印日志排查
     recipeDetail.value = {
       ingredients: [],
       steps: [],
       tagList: [],
-      ...(res.data || res) // 直接展开原始数据，无任何包装解析
+      ...(res.data || res)
     };
 
+    // 前端打印日志
+    console.log("前端接收数据：", recipeDetail.value);
+    console.log("食材列表：", recipeDetail.value.ingredients);
+    console.log("步骤列表：", recipeDetail.value.steps);
+
+    // 数量格式兼容
+    if (recipeDetail.value.ingredients && recipeDetail.value.ingredients.length) {
+      recipeDetail.value.ingredients = recipeDetail.value.ingredients.map(item => ({
+        ...item,
+        quantity: Number(item.quantity) || 0
+      }));
+    }
+
+    if (!recipeDetail.value.steps) recipeDetail.value.steps = [];
+
   } catch (error) {
-    // 完全保留原有错误处理逻辑
     console.error('加载食谱详情失败:', error);
     let errMsg = '加载食谱详情失败';
     if (error.response) {
@@ -285,14 +294,12 @@ const loadRecipeDetail = async () => {
   }
 }
 
-// 完全保留原有初始化逻辑
 onMounted(() => {
   loadRecipeDetail()
 })
 </script>
 
 <style scoped lang="scss">
-/* 完全保留原有样式，不做任何修改 */
 .recipe-detail {
   padding: 20px;
 

@@ -9,7 +9,7 @@
         </p>
       </div>
 
-      <!-- 标签页（loading联动+禁用状态） -->
+      <!-- 标签页（删除系统日志，保留用户管理/食谱管理） -->
       <el-tabs
           v-model="activeTab"
           type="card"
@@ -19,10 +19,9 @@
       >
         <el-tab-pane label="用户管理" name="user-manage"></el-tab-pane>
         <el-tab-pane label="食谱管理" name="recipe-audit"></el-tab-pane>
-        <el-tab-pane label="系统日志" name="system-log" disabled></el-tab-pane>
       </el-tabs>
 
-      <!-- 嵌套路由出口（强制刷新+样式兜底） -->
+      <!-- 嵌套路由出口 -->
       <div style="min-height: 500px; width: 100%;" v-loading="loading">
         <router-view :key="route.fullPath"></router-view>
       </div>
@@ -44,19 +43,19 @@ const loading = ref(false)
 let tabChangeTimer = null
 
 /**
- * 路由监听：精准同步标签页，避免闪烁
+ * 路由监听：仅同步用户管理/食谱管理标签页
  */
 watch(
     () => route.fullPath,
     async (newPath) => {
       await nextTick()
-      // 精准匹配子路由，同步标签页状态
+      // 仅匹配保留的两个标签页
       if (newPath.includes('/home/admin/user-manage')) {
         activeTab.value = 'user-manage'
       } else if (newPath.includes('/home/admin/recipe-audit')) {
         activeTab.value = 'recipe-audit'
       }
-      // 仅路由切换时触发loading，排除重复触发
+      // 路由切换时的loading逻辑不变
       if (newPath.startsWith('/home/admin/') && !loading.value) {
         loading.value = true
         setTimeout(() => loading.value = false, 300)
@@ -66,10 +65,10 @@ watch(
 )
 
 /**
- * 标签页切换：防抖+防重复跳转+安全错误提示
+ * 标签页切换：仅处理用户管理/食谱管理，无需判断系统日志
  */
 const handleTabChange = (tabName) => {
-  if (tabName === 'system-log' || loading.value) return
+  if (loading.value) return // 移除system-log的判断
 
   clearTimeout(tabChangeTimer)
   tabChangeTimer = setTimeout(() => {
@@ -86,19 +85,16 @@ const handleTabChange = (tabName) => {
 }
 
 /**
- * 挂载/卸载：仅保留基础逻辑，删除权限校验
+ * 挂载/卸载逻辑不变
  */
 onMounted(() => {
-  // 仅显示欢迎提示，无权限校验
   setTimeout(() => {
     ElMessage.success('欢迎进入管理员控制面板！', { duration: 2000 })
   }, 1000)
 })
 
 onUnmounted(() => {
-  // 清理定时器
   if (tabChangeTimer) clearTimeout(tabChangeTimer)
-  // 重置响应式数据
   loading.value = false
   activeTab.value = 'user-manage'
 })
@@ -138,7 +134,7 @@ onUnmounted(() => {
     }
   }
 
-  // loading样式兜底，避免布局错乱
+  // loading样式兜底
   :deep(.el-loading-mask) {
     background-color: rgba(255, 255, 255, 0.8);
     min-height: 500px;

@@ -62,7 +62,7 @@
       </el-row>
     </div>
 
-    <!-- 食谱列表 -->
+    <!-- 食谱列表（新增标签列） -->
     <el-table
         :data="recipeList"
         border
@@ -85,6 +85,23 @@
         </template>
       </el-table-column>
       <el-table-column prop="category" label="分类" width="120"></el-table-column>
+      <!-- 新增：标签列 -->
+      <el-table-column label="标签" min-width="150">
+        <template #default="scope">
+          <el-tag
+              v-for="(tag, index) in (scope.row.tagList || [])"
+              :key="index"
+              size="small"
+              type="primary"
+              style="margin: 0 2px;"
+          >
+            {{ tag }}
+          </el-tag>
+          <span v-if="!(scope.row.tagList && scope.row.tagList.length)" style="color: #909399;">
+            无
+          </span>
+        </template>
+      </el-table-column>
       <el-table-column prop="username" label="创建人" width="120">
         <template #default="scope">
           {{ scope.row.user?.username || '-' }}
@@ -441,6 +458,12 @@ onUnmounted(() => {
     &:hover {
       text-decoration: underline;
     }
+  }
+
+  // 新增：标签列样式优化
+  :deep(.el-table-column--label .el-tag) {
+    margin: 1px;
+    white-space: nowrap;
   }
 }
 </style>

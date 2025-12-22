@@ -5,9 +5,20 @@ import {
     register as userRegister,
     getUserInfo,
     updateUserInfo as apiUpdateUserInfo,
-    uploadAvatar as apiUploadAvatar
+    uploadImage // 仅保留真实存在的图片上传接口
 } from '@/api/user'
 import { ElMessage } from 'element-plus'
+
+// 通用图片URL拼接工具
+const getFullImageUrl = (imageUrl) => {
+    if (!imageUrl) return ''
+    if (imageUrl.startsWith('http://') || imageUrl.startsWith('https://')) {
+        return imageUrl
+    }
+    // 后端图片服务器地址（可替换为你的实际地址，或从环境变量读取）
+    const baseUrl = import.meta.env.VITE_IMAGE_BASE_URL || 'http://localhost:8080'
+    return `${baseUrl}${imageUrl}`
+}
 
 export const useUserStore = defineStore('user', () => {
     // ========== 核心状态（新增isAdmin/avatarUrl等） ==========
@@ -21,7 +32,11 @@ export const useUserStore = defineStore('user', () => {
             const res = await userLogin(loginForm)
             // 存储Token和用户信息（包含isAdmin/avatarUrl）
             token.value = res.token
-            userInfo.value = res.user || {}
+            // 修改1：登录时拼接头像完整URL，确保展示正常
+            userInfo.value = {
+                ...res.user,
+                avatarUrl: res.user?.avatarUrl ? getFullImageUrl(res.user.avatarUrl) : ''
+            }
 
             // 持久化存储（避免刷新丢失）
             localStorage.setItem('token', res.token)
@@ -65,7 +80,7 @@ export const useUserStore = defineStore('user', () => {
             id: '',
             username: '',
             email: '',
-            avatarUrl: '',
+            avatarUrl: '', // 字段名保持 avatarUrl 不变
             isAdmin: false,
             createdAt: ''
         }
@@ -80,7 +95,11 @@ export const useUserStore = defineStore('user', () => {
         if (!token.value) return
         try {
             const res = await getUserInfo()
-            userInfo.value = res.data || {}
+            // 修改2：刷新信息时拼接头像完整URL
+            userInfo.value = {
+                ...res.data,
+                avatarUrl: res.data?.avatarUrl ? getFullImageUrl(res.data.avatarUrl) : ''
+            }
             localStorage.setItem('userInfo', JSON.stringify(userInfo.value))
         } catch (error) {
             console.error('刷新用户信息失败：', error)
@@ -105,19 +124,34 @@ export const useUserStore = defineStore('user', () => {
         }
     }
 
-    // ========== 新增：更新头像（同步Store） ==========
-    const updateAvatar = async (formData) => {
+    // ========== 修改：更新头像（仅调用uploadImage接口，同步本地URL） ==========
+    const updateAvatar = async (file) => {
         try {
-            const res = await apiUploadAvatar(formData)
-            // 同步更新头像URL
-            userInfo.value.avatarUrl = res.data.avatarUrl
+            // 调用真实存在的/upload/image接口上传文件
+            const res = await uploadImage(file)
+            const rawImageUrl = res.data || ''
+            if (!rawImageUrl) {
+                ElMessage.error('上传失败：未获取到图片URL')
+                return null
+            }
+            // 拼接完整URL
+            const fullAvatarUrl = getFullImageUrl(rawImageUrl)
+            // 仅同步更新本地Store（无后端更新头像接口）
+            userInfo.value.avatarUrl = fullAvatarUrl
             localStorage.setItem('userInfo', JSON.stringify(userInfo.value))
-            ElMessage.success('头像上传成功')
-            return res.data.avatarUrl
+            ElMessage.success('头像上传成功（本地）')
+            return fullAvatarUrl // 返回完整URL，方便组件直接使用
         } catch (error) {
             ElMessage.error(error.message || '头像上传失败')
             return null
         }
+    }
+
+    // ========== 新增：清空头像（仅本地，无后端接口） ==========
+    const clearAvatar = () => {
+        userInfo.value.avatarUrl = ''
+        localStorage.setItem('userInfo', JSON.stringify(userInfo.value))
+        ElMessage.success('头像已清空（本地）')
     }
 
     // ========== 新增：判断是否为管理员（便捷方法） ==========
@@ -139,7 +173,8 @@ export const useUserStore = defineStore('user', () => {
         logout,
         refreshUserInfo, // 刷新用户信息
         updateUserInfo,  // 更新用户信息
-        updateAvatar,    // 更新头像
+        updateAvatar,    // 更新头像（仅本地）
+        clearAvatar,     // 清空头像（仅本地）
         isAdmin,         // 判断是否为管理员
         clearToken       // 清空Token
     }

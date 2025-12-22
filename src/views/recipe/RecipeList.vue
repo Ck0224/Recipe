@@ -1,11 +1,11 @@
 <template>
   <div class="recipe-list">
     <el-card>
-      <!-- 搜索筛选栏（保留原有逻辑，已删除隐私筛选框）-->
+      <!-- 搜索筛选栏（仅修改ID输入框宽度）-->
       <div class="search-bar">
         <el-row :gutter="20" type="flex" justify="center">
-          <!-- 原有筛选项：ID/名称/分类/食材/难度 -->
-          <el-col :span="4">
+          <!-- 食谱ID输入框：span从4改为6，增大宽度 -->
+          <el-col :span="6">
             <el-input
                 v-model="searchForm.id"
                 placeholder="请输入食谱ID（正整数）"
@@ -13,12 +13,13 @@
                 prefix-icon="Key"
                 @keyup.enter="loadRecipeList"
                 @input="validateId"
+                style="width: 100%;"
             ></el-input>
             <div class="input-tip" style="font-size: 12px; color: #999; margin-top: 4px;">
               仅支持正整数ID查询
             </div>
           </el-col>
-          <el-col :span="5">
+          <el-col :span="6"> <!-- 标题框宽度不变 -->
             <el-input
                 v-model="searchForm.title"
                 placeholder="请输入食谱名称（如番茄炒蛋）"
@@ -26,7 +27,7 @@
                 @keyup.enter="loadRecipeList"
             ></el-input>
           </el-col>
-          <el-col :span="5">
+          <el-col :span="5"> <!-- 分类框宽度不变 -->
             <el-input
                 v-model="searchForm.category"
                 placeholder="请输入分类（如家常菜）"
@@ -34,15 +35,7 @@
                 @keyup.enter="loadRecipeList"
             ></el-input>
           </el-col>
-          <el-col :span="5">
-            <el-input
-                v-model="searchForm.ingredient"
-                placeholder="请输入食材（如番茄）"
-                prefix-icon="Food"
-                @keyup.enter="loadRecipeList"
-            ></el-input>
-          </el-col>
-          <el-col :span="4">
+          <el-col :span="5"> <!-- 难度框宽度不变 -->
             <el-select
                 v-model="searchForm.difficulty"
                 placeholder="请选择难度"
@@ -76,7 +69,7 @@
         </el-row>
       </div>
 
-      <!-- 食谱列表（移除删除按钮） -->
+      <!-- 以下内容完全不变 -->
       <div class="list-content mt-4">
         <el-table
             :data="recipeList"
@@ -89,7 +82,6 @@
         >
           <el-table-column prop="id" label="ID" width="80" align="center"></el-table-column>
           <el-table-column prop="title" label="食谱名称" min-width="200">
-            <!-- 私有食谱标记（仅展示，不筛选） -->
             <template #default="scope">
               <span>
                 {{ scope.row.title }}
@@ -118,7 +110,6 @@
           <el-table-column prop="createdAt" label="创建时间" width="200"></el-table-column>
           <el-table-column label="操作" width="120" align="center">
             <template #default="scope">
-              <!-- 仅保留查看按钮：所有人可见 -->
               <el-button
                   type="primary"
                   size="small"
@@ -127,7 +118,6 @@
               >
                 查看
               </el-button>
-              <!-- 已移除所有删除按钮 -->
             </template>
           </el-table-column>
         </el-table>
@@ -165,12 +155,11 @@ const size = ref(10)
 const total = ref(0)
 const loading = ref(false)
 
-// 搜索表单：删除冗余的isPrivate字段
+// 搜索表单：删除ingredient字段
 const searchForm = reactive({
   id: '',
   title: '',
   category: '',
-  ingredient: '',
   difficulty: ''
 })
 
@@ -181,7 +170,7 @@ const validateId = () => {
   }
 }
 
-// 加载食谱列表：传递userId参数，删除isPrivate参数
+// 加载食谱列表：删除ingredient参数
 const loadRecipeList = async () => {
   if (searchForm.id !== '' && searchForm.id <= 0) {
     ElMessage.warning('食谱ID必须是正整数，请重新输入！')
@@ -196,9 +185,8 @@ const loadRecipeList = async () => {
       id: searchForm.id ? Number(searchForm.id) : undefined,
       title: searchForm.title.trim() || undefined,
       category: searchForm.category.trim() || undefined,
-      ingredient: searchForm.ingredient.trim() || undefined,
       difficulty: searchForm.difficulty || undefined,
-      userId: userStore.userInfo.id // 核心：传递当前用户ID（管理员/普通用户都传）
+      userId: userStore.userInfo.id
     }
     const res = await getRecipeList(params)
     recipeList.value = res.content || []
@@ -215,7 +203,6 @@ const resetSearch = () => {
   searchForm.id = ''
   searchForm.title = ''
   searchForm.category = ''
-  searchForm.ingredient = ''
   searchForm.difficulty = ''
   page.value = 0
   loadRecipeList()
