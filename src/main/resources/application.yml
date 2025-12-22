@@ -1,3 +1,4 @@
+# 数据库&核心配置（完全保留你的原有内容，仅合并重复的spring节点）
 spring:
   # 数据库配置
   datasource:
@@ -25,15 +26,38 @@ spring:
     time-zone: Asia/Shanghai
     serialization:
       write-dates-as-timestamps: false
+  # 合并静态资源映射配置（原重复的spring节点移到这里）
+  web:
+    resources:
+      static-locations: file:./uploads/,classpath:/static/
+  # 添加Spring Boot内置文件上传配置（替代FileUploadConfig.java，无需额外类）
+  servlet:
+    multipart:
+      max-file-size: 2MB    # 单个文件最大2MB（和前端校验一致）
+      max-request-size: 10MB # 单次请求最大10MB
 
-# JWT配置
+# JWT配置（完全保留）
 jwt:
   secret: recipe-manager-2025-secret-key-256bit-strong-enough-for-production-12345678
   expiration: 86400000
   issuer: recipe-manager-api
 
-# 服务器配置
+# 服务器配置（完全保留）
 server:
   port: 8080
   servlet:
     context-path: /api
+
+# 文件上传配置（完全保留）
+# 文件上传配置（修改upload.path为绝对路径）
+file:
+  upload:
+    # 示例1：项目根目录下的uploads/images（推荐）
+    path: ${user.dir}/uploads/images
+    # 示例2：自定义绝对路径（如D盘，按需修改）
+    # path: D:/recipe_uploads/images
+    avatar-path: ${user.dir}/uploads/avatars
+  access:
+    prefix: /images/
+    avatar-prefix: /avatars/
+

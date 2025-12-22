@@ -100,6 +100,21 @@
             <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
             <version>2.2.0</version>
         </dependency>
+        <!-- 原有依赖（如spring-boot-starter-web、jpa、mysql、security等）保留不变 -->
+
+        <!-- 添加文件上传依赖（仅新增这一段） -->
+        <dependency>
+            <groupId>commons-fileupload</groupId>
+            <artifactId>commons-fileupload</artifactId>
+            <version>1.4</version>
+        </dependency>
+
+        <!-- 可选：如果需要处理图片流，可添加 -->
+        <dependency>
+            <groupId>commons-io</groupId>
+            <artifactId>commons-io</artifactId>
+            <version>2.15.1</version>
+        </dependency>
 
     </dependencies>
 

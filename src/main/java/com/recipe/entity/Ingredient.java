@@ -5,7 +5,8 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-import com.fasterxml.jackson.annotation.JsonIgnore; // 已导入，直接用
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import java.math.BigDecimal;
 
 @Data
@@ -19,24 +20,46 @@ public class Ingredient {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    // 关键修复：添加@JsonIgnore，排除反向关联的recipe序列化
     @JsonIgnore
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "recipe_id", nullable = false)
+    @JoinColumn(name = "recipe_id") // 关键：移除 nullable = false
     private Recipe recipe;
 
     @Column(name = "name", nullable = false, length = 100)
-    private String name; // 食材名称
+    private String name;
 
     @Column(name = "quantity", precision = 10, scale = 2)
-    private BigDecimal quantity; // 数量
+    private BigDecimal quantity;
+
+    @JsonProperty("quantity")
+    public void setQuantityFromNumber(Number number) {
+        if (number != null) {
+            this.quantity = new BigDecimal(number.toString());
+        }
+    }
 
     @Column(name = "unit", length = 20)
-    private String unit; // 单位（克/勺/杯等）
+    private String unit;
 
     @Column(name = "note", length = 200)
-    private String note; // 备注（如"去皮"、"切丁"）
+    private String note;
 
     @Column(name = "sort_order")
-    private Integer sortOrder = 0; // 排序序号
+    private Integer sortOrder = 0;
+
+    public void setQuantity(BigDecimal quantity) {
+        this.quantity = quantity;
+    }
+
+    public void setQuantity(Integer quantity) {
+        if (quantity != null) {
+            this.quantity = new BigDecimal(quantity);
+        }
+    }
+
+    public void setQuantity(Double quantity) {
+        if (quantity != null) {
+            this.quantity = new BigDecimal(quantity);
+        }
+    }
 }

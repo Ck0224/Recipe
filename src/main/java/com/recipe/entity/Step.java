@@ -5,7 +5,7 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-import com.fasterxml.jackson.annotation.JsonIgnore; // 新增导入
+import com.fasterxml.jackson.annotation.JsonIgnore;
 
 @Data
 @Builder
@@ -18,24 +18,23 @@ public class Step {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    // 关键修复：添加@JsonIgnore，排除反向关联的recipe序列化
     @JsonIgnore
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "recipe_id", nullable = false)
+    @JoinColumn(name = "recipe_id") // 关键：移除 nullable = false
     private Recipe recipe;
 
     @Column(name = "step_number", nullable = false)
-    private Integer stepNumber; // 步骤编号
+    private Integer stepNumber;
 
     @Column(name = "description", nullable = false, columnDefinition = "TEXT")
-    private String description; // 步骤描述
+    private String description;
 
     @Column(name = "image_url", length = 500)
-    private String imageUrl; // 步骤图片
+    private String imageUrl;
 
     @Column(name = "timer_minutes")
-    private Integer timerMinutes; // 计时（分钟）
+    private Integer timerMinutes;
 
     @Column(name = "sort_order")
-    private Integer sortOrder = 0; // 排序序号
+    private Integer sortOrder = 0;
 }

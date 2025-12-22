@@ -6,6 +6,7 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonProperty; // 新增导入
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
@@ -30,15 +31,14 @@ public class User {
     @Column(name = "email", nullable = false, unique = true, length = 100)
     private String email;
 
-    // 密码隐藏（安全+避免JSON序列化嵌套）
-    @JsonIgnore
+    // 🌟 核心修改：改用@JsonProperty+@JsonIgnore，实现「接收不忽略，返回隐藏」
+    @JsonProperty(access = JsonProperty.Access.WRITE_ONLY) // 仅允许写入（接收前端参数），不允许读取（返回前端时隐藏）
     @Column(name = "password", nullable = false, length = 255)
     private String password;
 
     @Column(name = "avatar_url", length = 500)
     private String avatarUrl;
 
-    // 新增：管理员标识（核心字段）
     @Column(name = "is_admin", nullable = false, columnDefinition = "BOOLEAN DEFAULT false")
     private Boolean isAdmin = false;
 
@@ -53,7 +53,7 @@ public class User {
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
 
-    // 优化关联关系：FetchType改为LAZY（懒加载，提升查询性能）
+    // 关联关系（不变）
     @JsonIgnore
     @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
     private List<Recipe> recipes;

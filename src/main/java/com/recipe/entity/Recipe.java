@@ -2,7 +2,7 @@ package com.recipe.entity;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.annotation.JsonIgnore; // 新增导入
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -25,7 +25,6 @@ public class Recipe {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    // 关联用户：LAZY懒加载 + JsonIgnore避免序列化嵌套
     @JsonIgnore
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id", nullable = false)
@@ -41,28 +40,27 @@ public class Recipe {
     private String coverImage;
 
     @Column(name = "prep_time")
-    private Integer prepTime; // 准备时间（分钟）
+    private Integer prepTime;
 
     @Column(name = "cook_time", nullable = false)
-    private Integer cookTime; // 烹饪时间（分钟）
+    private Integer cookTime;
 
     @Column(name = "servings")
-    private Integer servings; // 份数
+    private Integer servings;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "difficulty")
     private Difficulty difficulty = Difficulty.MEDIUM;
 
     @Column(name = "category", length = 50)
-    private String category; // 菜系（中餐/西餐/甜点等）
+    private String category;
 
-    @Transient // 不映射到数据库
+    @Transient
     private List<String> tagList;
 
     @Column(name = "tags", columnDefinition = "JSON")
-    private String tags; // 存储JSON格式字符串
+    private String tags;
 
-    // 设置tagList时自动转为tags字符串
     public void setTagList(List<String> tagList) {
         this.tagList = tagList;
         try {
@@ -78,7 +76,6 @@ public class Recipe {
     @Column(name = "likes")
     private Integer likes = 0;
 
-    // 增强私有食谱字段：默认false + 非空约束
     @Column(name = "is_private", nullable = false, columnDefinition = "BOOLEAN DEFAULT false")
     private Boolean isPrivate = false;
 
@@ -90,34 +87,30 @@ public class Recipe {
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
 
-    // 关联食材：LAZY懒加载 + JsonIgnore避免序列化嵌套
-    @JsonIgnore
+    // 关键修改：添加 @Transient 禁止JPA级联
     @OneToMany(mappedBy = "recipe", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
     @OrderBy("sortOrder ASC")
+    @Transient  //标记为临时字段，不参与JPA持久化
     private List<Ingredient> ingredients;
 
-    // 关联步骤：LAZY懒加载 + JsonIgnore避免序列化嵌套
-    @JsonIgnore
+    // 关键修改：添加 @Transient 禁止JPA级联
     @OneToMany(mappedBy = "recipe", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
     @OrderBy("stepNumber ASC")
+     @Transient //标记为临时字段，不参与JPA持久化
     private List<Step> steps;
 
-    // 关联收藏：LAZY懒加载 + JsonIgnore避免序列化嵌套
     @JsonIgnore
     @OneToMany(mappedBy = "recipe", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
     private List<Favorite> favorites;
 
-    // 关联膳食计划：LAZY懒加载 + JsonIgnore避免序列化嵌套
     @JsonIgnore
     @OneToMany(mappedBy = "recipe", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
     private List<MealPlan> mealPlans;
 
-    // 难度枚举
     public enum Difficulty {
         EASY, MEDIUM, HARD
     }
 
-    // 新增：获取tagList（从tags字符串反序列化）
     public List<String> getTagList() {
         if (this.tagList == null && this.tags != null) {
             try {
